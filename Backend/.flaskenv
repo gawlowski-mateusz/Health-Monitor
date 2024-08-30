@@ -1,0 +1,5 @@
+FLASK_APP=app
+FLASK_DEBUG=True
+FLASK_RUN_HOST=localhost
+FLASK_RUN_PORT=8000
+SSL_CONTEXT=('cert.pem', 'key.pem')

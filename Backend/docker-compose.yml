@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:latest
+    container_name: db-1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+
+  adminer:
+    image: adminer:latest
+    container_name: adminer-1
+    ports:
+      - "8080:8080"
