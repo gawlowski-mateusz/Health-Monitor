@@ -5,7 +5,7 @@ import java.net.URL
 
 fun main() {
     // The URL to send the GET request to
-    val url = URL("http://127.0.0.1:5000/test")
+    val url = URL("http://127.0.0.1:8000/test")
 
     // Open a connection to the URL
     val connection = url.openConnection() as HttpURLConnection
