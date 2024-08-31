@@ -4,3 +4,4 @@ python-dotenv~=1.0.1
 sqlalchemy
 flask-sqlalchemy
 db~=0.1.1
+marshmallow~=3.22.0
