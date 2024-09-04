@@ -7,7 +7,7 @@ class UserSchema(Schema):
     password = fields.Str(required=True)
     name = fields.Str(required=True)
     birth_date = fields.Str(required=True)
-    sex = fields.Str(required=False)
+    sex = fields.Str(required=True)
     weight = fields.Int(required=False)
     height = fields.Int(required=False)
 

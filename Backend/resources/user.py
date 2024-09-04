@@ -1,9 +1,5 @@
 from flask.views import MethodView
-from flask_smorest import Blueprint, abort
-from sqlalchemy.exc import SQLAlchemyError
-
-from db import db
-# from models import UserModel
+from flask_smorest import Blueprint
 from schemas import UserSchema, UserUpdateSchema
 
 blp = Blueprint("Users", "users", description="Operations on users")

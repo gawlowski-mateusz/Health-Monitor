@@ -8,6 +8,9 @@ class UserModel(db.Model):
     email = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(50), nullable=False)
     name = db.Column(db.String(50), nullable=False)
+    birth_date = db.Column(db.Date, nullable=False)
     sex = db.Column(db.String(20), nullable=True)
-    weight = db.Column(db.Float, nullable=True)
+    weight = db.Column(db.Float(precision=1), nullable=True)
     height = db.Column(db.Integer, nullable=True)
+
+    activity = db.relationship('ActivityModel', back_populates="activities", lazy="dynamic")
