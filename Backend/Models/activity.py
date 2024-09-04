@@ -8,8 +8,8 @@ class ActivityModel(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
     training_id = db.Column(db.Integer, db.ForeignKey('trainings.training_id'), nullable=False)
     steps_id = db.Column(db.Integer, db.ForeignKey('steps.steps_id'), nullable=False)
-    date = db.Column(db.Date, nullable=False, unique=True)
+    date = db.Column(db.Date, nullable=False)
 
-    user = db.relationship('UserModel', back_populates='activities')
-    training = db.relationship('TrainingModel', back_populates='activities')
-    steps = db.relationship('StepModel', back_populates='activities')
+    user = db.relationship('UserModel', back_populates='activity')
+    training = db.relationship('TrainingModel', back_populates='activity')
+    steps = db.relationship('StepsModel', back_populates='activity')
