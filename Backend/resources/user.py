@@ -1,12 +1,16 @@
 from flask.views import MethodView
-from flask_smorest import Blueprint
+from flask_smorest import Blueprint, abort
+from sqlalchemy.exc import SQLAlchemyError
+
+from db import db
 from schemas import UserSchema, UserUpdateSchema
+from models import UserModel
 
 blp = Blueprint("Users", "users", description="Operations on users")
 
 
 @blp.route("/user/<string:user_id>")
-class Item(MethodView):
+class User(MethodView):
     @blp.response(200, UserSchema)
     def get(self, user_id):
         raise NotImplementedError("Getting an user is not implemented.")
@@ -21,7 +25,7 @@ class Item(MethodView):
 
 
 @blp.route("/user")
-class ItemList(MethodView):
+class UserList(MethodView):
     @blp.response(200, UserSchema(many=True))
     def get(self):
         raise NotImplementedError("Listing users is not implemented.")
@@ -29,4 +33,12 @@ class ItemList(MethodView):
     @blp.arguments(UserSchema)
     @blp.response(201, UserSchema)
     def post(self, user_data):
-        raise NotImplementedError("Creating an user is not implemented.")
+        user = UserModel(**user_data)
+
+        try:
+            db.session.add(user)
+            db.session.commit()
+        except SQLAlchemyError:
+            abort(500, message="An Error has occurred.")
+
+        return user

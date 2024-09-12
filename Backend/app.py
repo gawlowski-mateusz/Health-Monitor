@@ -2,6 +2,12 @@ import os
 from flask import Flask
 from flask_smorest import Api
 from resources.user import blp as user_blueprint
+from resources.activity import blp as activity_blueprint
+from resources.steps import blp as steps_blueprint
+from resources.training import blp as training_blueprint
+from resources.walking import blp as walking_blueprint
+from resources.running import blp as running_blueprint
+from resources.cycling import blp as cycling_blueprint
 from db import db
 import models
 
@@ -27,6 +33,12 @@ def create_app(db_url=None):
         db.create_all()
 
     api.register_blueprint(user_blueprint)
+    api.register_blueprint(activity_blueprint)
+    api.register_blueprint(steps_blueprint)
+    api.register_blueprint(training_blueprint)
+    api.register_blueprint(walking_blueprint)
+    api.register_blueprint(running_blueprint)
+    api.register_blueprint(cycling_blueprint)
 
     @app.route('/')
     def hello_flask():  # put application's code here

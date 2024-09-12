@@ -6,7 +6,7 @@ class ActivityModel(db.Model):
 
     activity_id = db.Column(db.Integer, nullable=False, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
-    training_id = db.Column(db.Integer, db.ForeignKey('trainings.training_id'), nullable=False)
+    training_id = db.Column(db.Integer, db.ForeignKey('training.training_id'), nullable=False)
     steps_id = db.Column(db.Integer, db.ForeignKey('steps.steps_id'), nullable=False)
     date = db.Column(db.Date, nullable=False)
 
