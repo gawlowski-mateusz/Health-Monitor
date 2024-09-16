@@ -30,7 +30,7 @@ fun MyApp() {
         }
         composable("login") {
             LoginScreen(
-                onLoginSuccess = { navController.navigate("home") },
+                onLoginSuccess = { navController.navigate("overview") },
                 onNavigateToHomeScreen = { navController.navigate("home") }
             )
         }
