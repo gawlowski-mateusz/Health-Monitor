@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +55,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
 }
 
 private suspend fun makeLoginRequest(): String {
-    val url = URL("http://10.0.2.2:8000/api/auth/login")
+    val url = URL("http://10.0.2.2:8000/user")
     val connection = withContext(Dispatchers.IO) {
         url.openConnection()
     } as HttpURLConnection
@@ -73,5 +74,14 @@ private suspend fun makeLoginRequest(): String {
         "Error: ${e.localizedMessage}"
     } finally {
         connection.disconnect()
+    }
+}
+
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewLoginScreen() {
+    LoginScreen(onLoginSuccess = { /*TODO*/ }) {
+        
     }
 }

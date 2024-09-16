@@ -24,7 +24,7 @@ fun MyApp() {
     NavHost(navController = navController, startDestination = "home") {
         composable("signup") {
             SignUpScreen(
-                onSignUpSuccess = { navController.navigate("home") },
+                onSignUpSuccess = { navController.navigate("overview") },
                 onNavigateToHomeScreen = { navController.navigate("home") }
             )
         }
@@ -39,6 +39,9 @@ fun MyApp() {
                 onLoginPanelChoose = { navController.navigate("login") },
                 onSignupPanelChoice = { navController.navigate("signup") }
             )
+        }
+        composable("overview") {
+            OverviewScreen("Test Name", 999, 90, 22, 35, 76, 87, 82 )
         }
     }
 }

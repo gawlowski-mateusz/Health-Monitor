@@ -12,13 +12,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun HealthOverviewScreen(
+fun OverviewScreen(
     name: String,
-    steps: String,
-    trainingTime: String,
-    calories: String,
-    pulse: String,
-    weight: String
+    steps: Int,
+    walkingTime: Int,
+    runningTime: Int,
+    cyclingTime: Int,
+    walkingPulse:Int,
+    runningPulse:Int,
+    cyclingPulse:Int,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -43,7 +45,8 @@ fun HealthOverviewScreen(
                 Button(onClick = {}) {
                     Text(text = "Edit profile")
                 }
-                Button(onClick = {}) {
+                Button(onClick = {
+                }) {
                     Text(text = "Log out")
                 }
             }
@@ -67,29 +70,68 @@ fun HealthOverviewScreen(
             // Steps, Water, Calories
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.Center
             ) {
                 HealthCard(steps, "Steps", "Out of 10,000")
-                HealthCard(trainingTime, "Minutes", "Training")
-                HealthCard(calories, "kCal", "Calories")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Pulse and Weight
+            // Walking
+            Text(
+                text = "Walking",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                HealthCard(pulse, "BPM", "Pulse")
-                HealthCard(weight, "KG", "Weight")
+                HealthCard(walkingPulse, "BPM", "Pulse")
+                HealthCard(walkingTime, "Minutes", "Training")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Running
+            Text(
+                text = "Running",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                HealthCard(runningPulse, "BPM", "Pulse")
+                HealthCard(runningTime, "Minutes", "Training")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Cycling
+            Text(
+                text = "Cycling",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+            )
+
+            // Running
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                HealthCard(cyclingPulse, "BPM", "Pulse")
+                HealthCard(cyclingTime, "Minutes", "Training")
             }
         }
     }
 }
 
 @Composable
-fun HealthCard(value: String, unit: String, description: String) {
+fun HealthCard(value: Int, unit: String, description: String) {
     Card(
         modifier = Modifier
             .width(150.dp)
@@ -103,7 +145,7 @@ fun HealthCard(value: String, unit: String, description: String) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = value,
+                text = value.toString(),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -124,13 +166,15 @@ fun HealthCard(value: String, unit: String, description: String) {
 
 @Preview(showBackground = true)
 @Composable
-fun PreviewHealthOverviewScreen() {
-    HealthOverviewScreen(
+fun PreviewOverviewScreen() {
+    OverviewScreen(
         name = "Your Name",
-        steps = "8k",
-        trainingTime = "90",
-        calories = "2k",
-        pulse = "78",
-        weight = "64"
+        steps = 8249,
+        walkingPulse = 72,
+        walkingTime = 20,
+        runningPulse = 96,
+        runningTime = 45,
+        cyclingPulse = 89,
+        cyclingTime = 30
     )
 }
