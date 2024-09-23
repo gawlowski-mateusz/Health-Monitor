@@ -1,7 +1,7 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from passlib.hash import pbkdf2_sha256
-from flask_jwt_extended import create_access_token,create_refresh_token, jwt_required, get_jwt, get_jwt_identity
+from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt, get_jwt_identity
 
 from db import db
 from blocklist import BLOCKLIST
@@ -23,7 +23,9 @@ class UserRegister(MethodView):
             password=pbkdf2_sha256.hash(user_data["password"]),
             name=user_data["name"],
             birth_date=user_data["birth_date"],
-            sex=user_data["sex"]
+            sex=user_data["sex"],
+            weight=user_data.get("weight", None),  # Set to None if not present
+            height=user_data.get("height", None),  # Set to None if not present
         )
         db.session.add(user)
         db.session.commit()
@@ -65,7 +67,7 @@ class UserLogout(MethodView):
 
 @blp.route("/user/<int:user_id>")
 class User(MethodView):
-    @blp.response(200, UserDeleteSchema)
+    @blp.response(200, UserSchema)
     def get(self, user_id):
         user = UserModel.query.get_or_404(user_id)
         return user

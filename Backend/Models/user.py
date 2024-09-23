@@ -13,4 +13,4 @@ class UserModel(db.Model):
     weight = db.Column(db.Float(precision=1), nullable=True)
     height = db.Column(db.Integer, nullable=True)
 
-    activity = db.relationship('ActivityModel', back_populates="user")
+    activity = db.relationship('ActivityModel', back_populates="user", lazy="dynamic")
