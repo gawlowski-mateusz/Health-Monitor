@@ -79,7 +79,7 @@ class PlainCyclingSchema(Schema):
     cycling_id = fields.Int(dump_only=True)
     average_pulse = fields.Int(required=True)
     duration = fields.Int(required=True)
-    date = fields.Date(required=True)
+    date = fields.Date(required=False)
 
 
 class TrainingSchema(PlainTrainingSchema):
@@ -99,5 +99,5 @@ class RunningSchema(PlainRunningSchema):
 
 
 class CyclingSchema(PlainCyclingSchema):
-    training_id = fields.Int(load_only=True, required=True)
+    training_id = fields.Int(load_only=True, required=False)
     training = fields.Nested(PlainTrainingSchema(), dump_only=True)
