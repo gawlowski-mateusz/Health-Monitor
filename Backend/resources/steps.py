@@ -3,6 +3,7 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from flask_jwt_extended import jwt_required
+from datetime import datetime
 
 from db import db
 from schemas import StepsSchema, UpdateStepsSchema
@@ -37,6 +38,29 @@ class StepsList(MethodView):
     @blp.response(201, StepsSchema)
     def post(self, steps_data):
         steps = StepsModel(**steps_data)
+
+        try:
+            db.session.add(steps)
+            db.session.commit()
+        except IntegrityError:
+            abort(400, message="Integrity Error")
+        except SQLAlchemyError:
+            abort(500, message="An Error has occurred.")
+
+        return steps
+
+
+@blp.route("/steps/goal")
+class StepsList(MethodView):
+    # @jwt_required()
+    @blp.arguments(UpdateStepsSchema)
+    @blp.response(201, StepsSchema)
+    def post(self, steps_data):
+        steps = StepsModel(
+            count=0,
+            goal=steps_data["goal"],
+            date=datetime.today().strftime('%Y-%m-%d'),
+        )
 
         try:
             db.session.add(steps)

@@ -13,7 +13,7 @@ blp = Blueprint("Training", "training", description="Operations on training")
 class TrainingList(MethodView):
     @blp.response(200, TrainingSchema(many=True))
     def get(self):
-        raise NotImplementedError("Listing Training is not implemented.")
+        return TrainingModel.query.all()
 
     @blp.arguments(TrainingSchema)
     @blp.response(201, TrainingSchema)
