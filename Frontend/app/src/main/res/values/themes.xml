@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Frontend" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Frontend" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Set the status bar color to match your background color -->
+        <item name="android:statusBarColor">@color/white</item>
+
+        <!-- Set the navigation bar color (bottom bar) to match your background color -->
+        <item name="android:navigationBarColor">@color/white</item>
+
+        <!-- Optional: Light status bar icons (only for API 23+). Adjust based on your background color. -->
+        <item name="android:windowLightStatusBar">true</item> <!-- For dark icons on a light background -->
+
+        <!-- Optional: Set window background color -->
+        <item name="android:windowBackground">@color/white</item>
+    </style>
+
 </resources>
