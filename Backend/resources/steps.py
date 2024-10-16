@@ -1,4 +1,3 @@
-import jwt
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
@@ -51,7 +50,7 @@ class StepsList(MethodView):
 
 
 @blp.route("/steps/goal")
-class StepsList(MethodView):
+class StepsGoal(MethodView):
     # @jwt_required()
     @blp.arguments(UpdateStepsSchema)
     @blp.response(201, StepsSchema)

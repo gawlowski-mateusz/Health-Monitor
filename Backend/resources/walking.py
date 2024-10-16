@@ -1,5 +1,6 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from sqlalchemy import desc
 from sqlalchemy.exc import SQLAlchemyError
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from datetime import datetime
@@ -43,9 +44,12 @@ class WalkingList(MethodView):
                 abort(500, message="An Error has occurred.")
 
             # If activity does not exist, then steps also does not exist
+            last_activity = ActivityModel.query.filter_by(user_id=user_id).order_by(desc(ActivityModel.date)).first()
+            last_steps_id = last_activity.steps_id
+            last_steps = StepsModel.query.filter_by(steps_id=last_steps_id).first()
             steps = StepsModel(
                 count=0,
-                goal=0,
+                goal=last_steps.goal if last_steps.goal else 0,  # Default to 0 if last_steps_goal is None
                 date=datetime.today().strftime('%Y-%m-%d'),
             )
 

@@ -49,7 +49,7 @@ class StepsSchema(Schema):
     steps_id = fields.Int(dump_only=True)
     count = fields.Int(required=True)
     goal = fields.Int(required=True)
-    date = fields.Date(required=True)
+    date = fields.Date(required=False)
 
 
 class UpdateStepsSchema(Schema):
