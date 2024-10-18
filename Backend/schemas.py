@@ -20,7 +20,7 @@ class UserLoginSchema(Schema):
 
 class UserUpdateSchema(Schema):
     password = fields.Str(required=False)
-    weight = fields.Int(required=False)
+    weight = fields.Float(required=False)
     height = fields.Int(required=False)
 
 
@@ -41,6 +41,10 @@ class UpdateActivitySchema(Schema):
     user_id = fields.Int(required=False)
     steps_id = fields.Int(required=False)
     training_id = fields.Int(required=False)
+    date = fields.Date(required=False)
+
+
+class GetActivitySchema(Schema):
     date = fields.Date(required=False)
 
 

@@ -11,3 +11,11 @@ class CyclingModel(db.Model):
 
     training_id = db.Column(db.Integer, db.ForeignKey("training.training_id"), nullable=False)
     training = db.relationship('TrainingModel', back_populates='cycling')
+
+    def to_dict(self):
+        return {
+            "cycling_id": self.cycling_id,
+            "average_pulse": self.average_pulse,
+            "duration": self.duration,
+            "date": self.date.strftime('%Y-%m-%d')  # Convert date to string for JSON compatibility
+        }

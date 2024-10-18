@@ -47,6 +47,24 @@ class UserLogin(MethodView):
         abort(401, message="Invalid credentials")
 
 
+@blp.route("/update-profile")
+class UserUpdateProfile(MethodView):
+    @jwt_required()
+    @blp.arguments(UserUpdateSchema)
+    def patch(self, user_data):
+        user_id = get_jwt_identity()
+        user = UserModel.query.filter(UserModel.user_id == user_id).first()
+        # user = UserModel.query.filter(UserModel.user_id == 1).first()
+
+        user.password = pbkdf2_sha256.hash(user_data.get("password", user.password))
+        user.weight = user_data.get("weight", user.weight)
+        user.height = user_data.get("height", user.height)
+
+        db.session.commit()
+        # db.session.add(user)
+        return {"message": "User updated successfully"}, 200
+
+
 @blp.route("/refresh")
 class TokenRefresh(MethodView):
     @jwt_required(refresh=True)
@@ -78,8 +96,3 @@ class User(MethodView):
         db.session.delete(user)
         db.session.commit()
         return {"message": "User deleted successfully"}, 200
-
-    @blp.arguments(UserUpdateSchema)
-    @blp.response(200, UserUpdateSchema)
-    def put(self, user_data, user_id):
-        raise NotImplementedError("Updating user data is not implemented.")
