@@ -1,13 +1,17 @@
 package com.mateusz.frontend
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -15,16 +19,17 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun OverviewScreen(
-    onEditProfileChoice : () -> Unit,
-    onLogOutChoice : () -> Unit,
-    name: String,
-    steps: Int,
-    walkingTime: Int,
-    runningTime: Int,
-    cyclingTime: Int,
-    walkingPulse:Int,
-    runningPulse:Int,
-    cyclingPulse:Int,
+    onEditProfileChoice: () -> Unit,
+    onLogOutChoice: () -> Unit,
+    name: String?,
+    steps: Int?,
+    stepsGoal: Int?,
+    walkingTime: Int?,
+    runningTime: Int?,
+    cyclingTime: Int?,
+    walkingPulse: Int?,
+    runningPulse: Int?,
+    cyclingPulse: Int?,
 ) {
     val context = LocalContext.current
 
@@ -41,24 +46,68 @@ fun OverviewScreen(
             // Profile Picture and Name
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = name,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Button(onClick = {
-                    onEditProfileChoice()
-                }) {
-                    Text(text = "Edit profile")
+                if (name != null) {
+                    Text(
+                        text = name,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .padding(start = 4.dp, end = 4.dp)
+                            .weight(0.5F)
+                    )
+                } else {
+                    Text(
+                        text = "No data...",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-                Button(onClick = {
-//                    TODO Implement API call
-                    onLogOutChoice()
-                    Toast.makeText(context, "Logged out successfully!", Toast.LENGTH_SHORT).show()
-                }) {
-                    Text(text = "Log out")
+                OutlinedButton(
+                    onClick = {
+                        onEditProfileChoice()
+                    },
+                    modifier = Modifier
+                        .padding(start = 4.dp, end = 4.dp)
+                        .weight(0.5F)
+                        .height(50.dp),  // Adjust height to match the screenshot
+                    shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                    border = BorderStroke(
+                        2.dp,
+                        color = colorResource(id = R.color.light_blue)
+                    )  // Using custom color
+                ) {
+                    Text(
+                        "Edit Profile",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        //TODO implement functionality
+                        onLogOutChoice()
+                    },
+                    modifier = Modifier
+                        .padding(start = 4.dp, end = 4.dp)
+                        .weight(0.5F)
+                        .height(50.dp),  // Adjust height to match the screenshot
+                    shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                    border = BorderStroke(
+                        2.dp,
+                        color = colorResource(id = R.color.light_blue)
+                    )  // Using custom color
+                ) {
+                    Text(
+                        "Logout",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                    )
                 }
             }
 
@@ -66,7 +115,7 @@ fun OverviewScreen(
 
             // Health Overview Header
             Text(
-                text = "Health Overview",
+                text = "Training Sessions Overview",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
             )
@@ -78,12 +127,36 @@ fun OverviewScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Steps, Water, Calories
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onLogOutChoice()
+                    },
                 horizontalArrangement = Arrangement.Center
             ) {
-                HealthCard(steps, "Steps", "Out of 10,000")
+                if (steps != null && stepsGoal != null) {
+                    HealthCard(steps, "Steps", "Out of $stepsGoal")
+                } else {
+                    Card(
+                        modifier = Modifier
+                            .width(150.dp)
+                            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                            .height(100.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
+                            contentColor = colorResource(id = R.color.white)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("No steps data found...")
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -96,12 +169,38 @@ fun OverviewScreen(
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onLogOutChoice()
+                    },
+                horizontalArrangement = Arrangement.Center
             ) {
-                HealthCard(walkingPulse, "BPM", "Pulse")
-                HealthCard(walkingTime, "Minutes", "Training")
+                if (walkingPulse != null && walkingTime != null) {
+                    HealthCard(walkingPulse, "BPM", "Pulse")
+                    HealthCard(walkingTime, "Minutes", "Training")
+                } else {
+                    Card(
+                        modifier = Modifier
+                            .width(300.dp)
+                            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                            .height(100.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
+                            contentColor = colorResource(id = R.color.white)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("No walking sessions found...")
+                        }
+                    }
+                }
             }
+
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -113,11 +212,36 @@ fun OverviewScreen(
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onLogOutChoice()
+                    },
+                horizontalArrangement = Arrangement.Center
             ) {
-                HealthCard(runningPulse, "BPM", "Pulse")
-                HealthCard(runningTime, "Minutes", "Training")
+                if (runningPulse != null && runningTime != null) {
+                    HealthCard(runningPulse, "BPM", "Pulse")
+                    HealthCard(runningTime, "Minutes", "Training")
+                } else {
+                    Card(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                            .height(100.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
+                            contentColor = colorResource(id = R.color.white)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("No running sessions found...")
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -131,11 +255,88 @@ fun OverviewScreen(
 
             // Running
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onLogOutChoice()
+                    },
+                horizontalArrangement = Arrangement.Center
             ) {
-                HealthCard(cyclingPulse, "BPM", "Pulse")
-                HealthCard(cyclingTime, "Minutes", "Training")
+                if (cyclingPulse != null && cyclingTime != null) {
+                    HealthCard(cyclingPulse, "BPM", "Pulse")
+                    HealthCard(cyclingTime, "Minutes", "Training")
+                } else {
+                    Card(
+                        modifier = Modifier
+                            .width(300.dp)
+                            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                            .height(100.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
+                            contentColor = colorResource(id = R.color.white)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("No cycling sessions found...")
+                        }
+                    }
+                }
+            }
+
+            // Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+//                Choose data button
+                OutlinedButton(
+                    onClick = {
+                        //TODO implement functionality
+                    },
+                    modifier = Modifier
+                        .padding(top = 24.dp, start = 4.dp, end = 4.dp)
+                        .weight(0.5F)
+                        .height(56.dp),  // Adjust height to match the screenshot
+                    shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                    border = BorderStroke(
+                        2.dp,
+                        color = colorResource(id = R.color.light_blue)
+                    )  // Using custom color
+                ) {
+                    Text(
+                        "Choose date",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                    )
+                }
+
+//                Refresh button
+                OutlinedButton(
+                    onClick = {
+                        //TODO implement functionality
+                    },
+                    modifier = Modifier
+                        .padding(top = 24.dp, start = 4.dp, end = 4.dp)
+                        .weight(0.5F)
+                        .height(56.dp),  // Adjust height to match the screenshot
+                    shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                    border = BorderStroke(
+                        2.dp,
+                        color = colorResource(id = R.color.light_blue)
+                    )  // Using custom color
+                ) {
+                    Text(
+                        "Refresh",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                    )
+                }
             }
         }
     }
@@ -146,8 +347,12 @@ fun HealthCard(value: Int, unit: String, description: String) {
     Card(
         modifier = Modifier
             .width(150.dp)
+            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
             .height(100.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0E6FF))
+        colors = CardDefaults.cardColors(
+            containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
+            contentColor = colorResource(id = R.color.white)
+        )
     ) {
         Column(
             modifier = Modifier
@@ -163,13 +368,13 @@ fun HealthCard(value: Int, unit: String, description: String) {
             Text(
                 text = unit,
                 fontSize = 14.sp,
-                color = Color.Gray
+                color = Color.Black
             )
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = description,
                 fontSize = 12.sp,
-                color = Color.Gray
+                color = Color.Black
             )
         }
     }
@@ -183,7 +388,8 @@ fun PreviewOverviewScreen() {
         onLogOutChoice = {},
         name = "Your Name",
         steps = 8249,
-        walkingPulse = 72,
+        stepsGoal = null,
+        walkingPulse = null,
         walkingTime = 20,
         runningPulse = 96,
         runningTime = 45,

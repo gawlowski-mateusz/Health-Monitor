@@ -1,5 +1,6 @@
 package com.mateusz.frontend
 
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -84,7 +85,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
             onClick = {
                 // Launch a coroutine to perform the network request
                 CoroutineScope(Dispatchers.IO).launch {
-                    val result = makeLoginRequest(email, password)
+                    val result = makeLoginRequest(email, password, context)
                     withContext(Dispatchers.Main) {
                         loginResult = result
                         if (result == "Success") {
@@ -112,6 +113,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
             )
         }
 
+
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
@@ -138,7 +140,11 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
     }
 }
 
-private suspend fun makeLoginRequest(email: String, password: String): String {
+private suspend fun makeLoginRequest(
+    email: String,
+    password: String,
+    context: Context
+): String {
     val url = URL("http://10.0.2.2:8000/login") // Replace with your actual login API URL
 
     val connection = withContext(Dispatchers.IO) {
@@ -167,7 +173,16 @@ private suspend fun makeLoginRequest(email: String, password: String): String {
 
         val responseCode = connection.responseCode
         if (responseCode == HttpURLConnection.HTTP_OK) {
-            connection.inputStream.bufferedReader().use { it.readText() }
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            val jsonResponse = JSONObject(response)
+
+            // Extract the token
+            val accessToken = jsonResponse.getString("access_token")
+
+            // Save the token in SharedPreferences
+            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            sharedPreferences.edit().putString("access_token", accessToken).apply()
+
             return "Success"
         } else {
             "Failed with response code $responseCode"

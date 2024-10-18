@@ -21,10 +21,10 @@ class MainActivity : ComponentActivity() {
 fun MyApp() {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "overview") {
+    NavHost(navController = navController, startDestination = "home") {
         composable("signup") {
             SignUpScreen(
-                onSignUpSuccess = { navController.navigate("overview") },
+                onSignUpSuccess = { navController.navigate("login") },
                 onNavigateToHomeScreen = { navController.navigate("home") }
             )
         }
@@ -44,7 +44,8 @@ fun MyApp() {
             OverviewScreen(
                 onEditProfileChoice = {navController.navigate("edit_profile")},
                 onLogOutChoice = {navController.navigate("home")},
-                "Test Name", 999, 90, 22, 35, 76, 87, 82 )
+                null, null, null, null, null,
+                null, null, null, null )
         }
         composable("edit_profile") {
             EditProfileScreen(
