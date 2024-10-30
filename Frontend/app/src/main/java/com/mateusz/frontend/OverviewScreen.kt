@@ -1,6 +1,5 @@
 package com.mateusz.frontend
 
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,6 +20,7 @@ import androidx.compose.ui.unit.sp
 fun OverviewScreen(
     onEditProfileChoice: () -> Unit,
     onLogOutChoice: () -> Unit,
+    onWalkingSessionsChoice: () -> Unit,
     name: String?,
     steps: Int?,
     stepsGoal: Int?,
@@ -136,7 +136,7 @@ fun OverviewScreen(
                 horizontalArrangement = Arrangement.Center
             ) {
                 if (steps != null && stepsGoal != null) {
-                    HealthCard(steps, "Steps", "Out of $stepsGoal")
+                    WalkingCard(steps, "Steps", "Out of $stepsGoal")
                 } else {
                     Card(
                         modifier = Modifier
@@ -172,13 +172,13 @@ fun OverviewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        onLogOutChoice()
+                        onWalkingSessionsChoice()
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
                 if (walkingPulse != null && walkingTime != null) {
-                    HealthCard(walkingPulse, "BPM", "Pulse")
-                    HealthCard(walkingTime, "Minutes", "Training")
+                    WalkingCard(walkingPulse, "BPM", "Pulse")
+                    WalkingCard(walkingTime, "Minutes", "Training")
                 } else {
                     Card(
                         modifier = Modifier
@@ -220,8 +220,8 @@ fun OverviewScreen(
                 horizontalArrangement = Arrangement.Center
             ) {
                 if (runningPulse != null && runningTime != null) {
-                    HealthCard(runningPulse, "BPM", "Pulse")
-                    HealthCard(runningTime, "Minutes", "Training")
+                    WalkingCard(runningPulse, "BPM", "Pulse")
+                    WalkingCard(runningTime, "Minutes", "Training")
                 } else {
                     Card(
                         modifier = Modifier
@@ -263,8 +263,8 @@ fun OverviewScreen(
                 horizontalArrangement = Arrangement.Center
             ) {
                 if (cyclingPulse != null && cyclingTime != null) {
-                    HealthCard(cyclingPulse, "BPM", "Pulse")
-                    HealthCard(cyclingTime, "Minutes", "Training")
+                    WalkingCard(cyclingPulse, "BPM", "Pulse")
+                    WalkingCard(cyclingTime, "Minutes", "Training")
                 } else {
                     Card(
                         modifier = Modifier
@@ -386,6 +386,7 @@ fun PreviewOverviewScreen() {
     OverviewScreen(
         onEditProfileChoice = {},
         onLogOutChoice = {},
+        onWalkingSessionsChoice = {},
         name = "Your Name",
         steps = 8249,
         stepsGoal = null,

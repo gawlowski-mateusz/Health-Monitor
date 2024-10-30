@@ -44,6 +44,7 @@ fun MyApp() {
             OverviewScreen(
                 onEditProfileChoice = {navController.navigate("edit_profile")},
                 onLogOutChoice = {navController.navigate("home")},
+                onWalkingSessionsChoice = {navController.navigate("walking_sessions")},
                 null, null, null, null, null,
                 null, null, null, null )
         }
@@ -51,6 +52,11 @@ fun MyApp() {
             EditProfileScreen(
                 onSaveChoice = {navController.navigate("overview")},
                 onCancelChoice = {navController.navigate("overview")}
+            )
+        }
+        composable("walking_sessions") {
+            WalkingSessionsScreen(
+                onOverviewChoice = {navController.navigate("overview")}
             )
         }
     }
