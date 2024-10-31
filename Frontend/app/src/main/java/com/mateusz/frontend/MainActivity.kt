@@ -56,7 +56,14 @@ fun MyApp() {
         }
         composable("walking_sessions") {
             WalkingSessionsScreen(
-                onOverviewChoice = {navController.navigate("overview")}
+                onOverviewChoice = {navController.navigate("overview")},
+                onAddNewWalkingSessionChoice = {navController.navigate("new_walking_session")}
+            )
+        }
+        composable("new_walking_session") {
+            NewWalkingSessionScreen(
+                onSaveChoice = {navController.navigate("walking_sessions")},
+                onCancelChoice = {navController.navigate("walking_sessions")}
             )
         }
     }
