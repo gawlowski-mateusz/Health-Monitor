@@ -21,6 +21,7 @@ fun OverviewScreen(
     onEditProfileChoice: () -> Unit,
     onLogOutChoice: () -> Unit,
     onWalkingSessionsChoice: () -> Unit,
+    onRunningSessionsChoice: () -> Unit,
     name: String?,
     steps: Int?,
     stepsGoal: Int?,
@@ -170,7 +171,7 @@ fun OverviewScreen(
 
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(300.dp)
                     .clickable {
                         onWalkingSessionsChoice()
                     },
@@ -213,9 +214,9 @@ fun OverviewScreen(
 
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(300.dp)
                     .clickable {
-                        onLogOutChoice()
+                        onRunningSessionsChoice()
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -225,7 +226,7 @@ fun OverviewScreen(
                 } else {
                     Card(
                         modifier = Modifier
-                            .width(320.dp)
+                            .width(300.dp)
                             .padding(top = 4.dp, start = 8.dp, end = 8.dp)
                             .height(100.dp),
                         colors = CardDefaults.cardColors(
@@ -253,10 +254,9 @@ fun OverviewScreen(
                 fontWeight = FontWeight.Bold,
             )
 
-            // Running
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(300.dp)
                     .clickable {
                         onLogOutChoice()
                     },
@@ -387,6 +387,7 @@ fun PreviewOverviewScreen() {
         onEditProfileChoice = {},
         onLogOutChoice = {},
         onWalkingSessionsChoice = {},
+        onRunningSessionsChoice = {},
         name = "Your Name",
         steps = 8249,
         stepsGoal = null,

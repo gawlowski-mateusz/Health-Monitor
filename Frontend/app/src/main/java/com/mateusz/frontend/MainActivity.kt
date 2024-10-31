@@ -45,6 +45,7 @@ fun MyApp() {
                 onEditProfileChoice = {navController.navigate("edit_profile")},
                 onLogOutChoice = {navController.navigate("home")},
                 onWalkingSessionsChoice = {navController.navigate("walking_sessions")},
+                onRunningSessionsChoice = {navController.navigate("running_sessions")},
                 null, null, null, null, null,
                 null, null, null, null )
         }
@@ -64,6 +65,18 @@ fun MyApp() {
             NewWalkingSessionScreen(
                 onSaveChoice = {navController.navigate("walking_sessions")},
                 onCancelChoice = {navController.navigate("walking_sessions")}
+            )
+        }
+        composable("running_sessions") {
+            RunningSessionsScreen(
+                onOverviewChoice = {navController.navigate("overview")},
+                onAddNewRunningSessionChoice = {navController.navigate("new_running_session")}
+            )
+        }
+        composable("new_running_session") {
+            NewRunningSessionScreen(
+                onSaveChoice = {navController.navigate("running_sessions")},
+                onCancelChoice = {navController.navigate("running_sessions")}
             )
         }
     }
