@@ -53,8 +53,7 @@ fun MyApp() {
         }
         composable("profile_view") {
             ProfileViewScreen(
-                onOverviewChoice = {navController.navigate("overview")},
-                onCancelChoice = {navController.navigate("overview")}
+                onGoBackChoice = {navController.navigate("overview")},
             )
         }
         composable("edit_profile") {
