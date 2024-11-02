@@ -42,14 +42,19 @@ fun MyApp() {
         }
         composable("overview") {
             OverviewScreen(
+                onViewProfileChoice = {navController.navigate("profile_view")},
                 onEditProfileChoice = {navController.navigate("edit_profile")},
                 onLogOutChoice = {navController.navigate("home")},
                 onWalkingSessionsChoice = {navController.navigate("walking_sessions")},
                 onRunningSessionsChoice = {navController.navigate("running_sessions")},
-                null, null, null, null, null,
-                null, null, null, null )
                 onCyclingSessionsChoice = {navController.navigate("cycling_sessions")},
                 )
+        }
+        composable("profile_view") {
+            ProfileViewScreen(
+                onOverviewChoice = {navController.navigate("overview")},
+                onCancelChoice = {navController.navigate("overview")}
+            )
         }
         composable("edit_profile") {
             EditProfileScreen(
