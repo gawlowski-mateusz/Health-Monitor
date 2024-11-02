@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from db import db
 from schemas import ActivitySchema
 from schemas import GetActivitySchema
+from models import UserModel
 from models import ActivityModel
 from models import StepsModel
 from models import WalkingModel
@@ -59,9 +60,22 @@ class ActivityList(MethodView):
         activity = ActivityModel.query.filter_by(user_id=user_id, date=activity_data["date"]).first()
 
         if not activity:
-            return {"message": "Activity not found"}, 404
+            user = UserModel.query.filter_by(user_id=user_id).first()
+            user_name = user.name
+            user_dict = {"user": [{"name": user_name}]}
+
+            activity_respond = {
+                "user": user_dict['user'],
+                "steps": [],
+                "walking": [],
+                "running": [],
+                "cycling": []
+            }
+
+            return {"activity": activity_respond}, 200
 
         # Fetch steps, walking, running, and cycling data for the given date
+        user = UserModel.query.filter_by(user_id=user_id).first()
         steps = StepsModel.query.filter_by(steps_id=activity.steps_id, date=activity_data["date"]).all()
         walking = WalkingModel.query.filter_by(training_id=activity.training_id, date=activity_data["date"]).all()
         running = RunningModel.query.filter_by(training_id=activity.training_id, date=activity_data["date"]).all()
@@ -71,32 +85,41 @@ class ActivityList(MethodView):
         running = [run.to_dict() for run in running]
         cycling = [cycle.to_dict() for cycle in cycling]
 
-        # Function to sum durations and calculate average pulse
         def calculate_totals_and_averages(activity_to_calculate):
+            if not activity_to_calculate:  # If the activity list is empty
+                return None, None
             total_duration = sum(item['duration'] for item in activity_to_calculate)
-            average_pulse = statistics.mean(item['average_pulse'] for item in activity_to_calculate)
+            average_pulse = round(statistics.mean(item['average_pulse'] for item in activity_to_calculate))
             return total_duration, average_pulse
 
-        # Calculate for cycling, running, and walking
+        user_name = user.name
+
+        # Calculate for cycling, running, and walking, only if they exist
         walking_duration, walking_avg_pulse = calculate_totals_and_averages(walking)
         running_duration, running_avg_pulse = calculate_totals_and_averages(running)
         cycling_duration, cycling_avg_pulse = calculate_totals_and_averages(cycling)
 
         # Prepare the response
+        user_dict = {"user": [{"name": user_name}]}
         steps_dict = {"steps": [step.to_dict() for step in steps]}
-        walking_dict = {"walking": [{"duration": walking_duration, "average_pulse": walking_avg_pulse}]}
-        running_dict = {"running": [{"duration": running_duration, "average_pulse": running_avg_pulse}]}
-        cycling_dict = {"cycling": [{"duration": cycling_duration, "average_pulse": cycling_avg_pulse}]}
 
-        # Combine the dictionaries correctly
+        # Create activity dictionaries only if data exists
+        walking_dict = {"walking": [
+            {"duration": walking_duration, "average_pulse": walking_avg_pulse}] if walking_duration is not None else []}
+        running_dict = {"running": [
+            {"duration": running_duration, "average_pulse": running_avg_pulse}] if running_duration is not None else []}
+        cycling_dict = {"cycling": [
+            {"duration": cycling_duration, "average_pulse": cycling_avg_pulse}] if cycling_duration is not None else []}
+
+        # Combine the dictionaries
         activity_respond = {
+            "user": user_dict['user'],
             "steps": steps_dict['steps'],
             "walking": walking_dict['walking'],
             "running": running_dict['running'],
             "cycling": cycling_dict['cycling']
         }
 
-        # Return the activity with its relationships serialized
         return {"activity": activity_respond}, 200
 
 
