@@ -48,6 +48,8 @@ fun MyApp() {
                 onRunningSessionsChoice = {navController.navigate("running_sessions")},
                 null, null, null, null, null,
                 null, null, null, null )
+                onCyclingSessionsChoice = {navController.navigate("cycling_sessions")},
+                )
         }
         composable("edit_profile") {
             EditProfileScreen(
@@ -77,6 +79,18 @@ fun MyApp() {
             NewRunningSessionScreen(
                 onSaveChoice = {navController.navigate("running_sessions")},
                 onCancelChoice = {navController.navigate("running_sessions")}
+            )
+        }
+        composable("cycling_sessions") {
+            CyclingSessionsScreen(
+                onOverviewChoice = {navController.navigate("overview")},
+                onAddNewCyclingSessionChoice = {navController.navigate("new_cycling_session")}
+            )
+        }
+        composable("new_cycling_session") {
+            NewCyclingSessionScreen(
+                onSaveChoice = {navController.navigate("cycling_sessions")},
+                onCancelChoice = {navController.navigate("cycling_sessions")}
             )
         }
     }
