@@ -49,6 +49,7 @@ fun OverviewScreen(
     onViewProfileChoice: () -> Unit,
     onEditProfileChoice: () -> Unit,
     onLogOutChoice: () -> Unit,
+    onEditStepsChoice: () -> Unit,
     onWalkingSessionsChoice: () -> Unit,
     onRunningSessionsChoice: () -> Unit,
     onCyclingSessionsChoice: () -> Unit,
@@ -148,9 +149,9 @@ fun OverviewScreen(
 
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(300.dp)
                     .clickable {
-                        onLogOutChoice()
+                        onEditStepsChoice()
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -552,6 +553,7 @@ fun PreviewOverviewScreen() {
         onViewProfileChoice = {},
         onEditProfileChoice = {},
         onLogOutChoice = {},
+        onEditStepsChoice = {},
         onWalkingSessionsChoice = {},
         onRunningSessionsChoice = {},
         onCyclingSessionsChoice = {},

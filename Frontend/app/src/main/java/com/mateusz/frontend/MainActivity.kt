@@ -45,6 +45,7 @@ fun MyApp() {
                 onViewProfileChoice = {navController.navigate("profile_view")},
                 onEditProfileChoice = {navController.navigate("edit_profile")},
                 onLogOutChoice = {navController.navigate("home")},
+                onEditStepsChoice = {navController.navigate("edit_steps")},
                 onWalkingSessionsChoice = {navController.navigate("walking_sessions")},
                 onRunningSessionsChoice = {navController.navigate("running_sessions")},
                 onCyclingSessionsChoice = {navController.navigate("cycling_sessions")},
@@ -58,6 +59,12 @@ fun MyApp() {
         }
         composable("edit_profile") {
             EditProfileScreen(
+                onSaveChoice = {navController.navigate("overview")},
+                onCancelChoice = {navController.navigate("overview")}
+            )
+        }
+        composable("edit_steps") {
+            EditStepsScreen(
                 onSaveChoice = {navController.navigate("overview")},
                 onCancelChoice = {navController.navigate("overview")}
             )
