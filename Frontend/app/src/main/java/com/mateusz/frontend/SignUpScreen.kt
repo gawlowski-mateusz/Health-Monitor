@@ -1,19 +1,26 @@
 package com.mateusz.frontend
 
+import android.app.DatePickerDialog
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
@@ -32,18 +39,22 @@ import java.net.URL
 import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.*
 
 @Composable
 fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) {
     val context = LocalContext.current
     var signUpResult by remember { mutableStateOf("") }
+    val calendar = Calendar.getInstance()
+    var showGenderMenu by remember { mutableStateOf(false) }
 
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var birthDateInput by remember { mutableStateOf("") }
-    var sex by remember { mutableStateOf("") }
+    var birthDateInput by remember { mutableStateOf<LocalDate?>(null) }
+    var gender by remember { mutableStateOf("") }
     var weight by remember { mutableStateOf("") }
     var height by remember { mutableStateOf("") }
 
@@ -54,7 +65,6 @@ fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Display the logo at the top
         Image(
             painter = painterResource(id = R.drawable.logo_simple),  // Assuming logo.png is placed in res/drawable
             contentDescription = "App Logo",
@@ -63,8 +73,7 @@ fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit
                 .padding(bottom = 8.dp),
             contentScale = ContentScale.Fit
         )
-
-
+        
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
@@ -92,25 +101,82 @@ fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = birthDateInput,
-            onValueChange = { birthDateInput = it },
-            label = { Text("Birth Date (YYYY-MM-DD)") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-            modifier = Modifier.fillMaxWidth()
-        )
+        val datePickerDialog = remember {
+            DatePickerDialog(
+                context,
+                { _, year, month, dayOfMonth ->
+                    birthDateInput = LocalDate.of(year, month + 1, dayOfMonth)
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+            )
+        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = Color.White,
+                    shape = RoundedCornerShape(4.dp)
+                )
+                .border(BorderStroke(1.dp, Color.Gray), shape = RoundedCornerShape(4.dp))
+                .padding(16.dp)
+                .clickable { datePickerDialog.show() }
+        ) {
+            Text(
+                text = birthDateInput?.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) ?: "Birth Date (YYYY-MM-DD)",
+                color = Color.Black
+            )
+        }
 
-        OutlinedTextField(
-            value = sex,
-            onValueChange = { sex = it },
-            label = { Text("Sex (Male/Female)") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-            modifier = Modifier.fillMaxWidth()
-        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DropdownMenu(
+            expanded = showGenderMenu,
+            onDismissRequest = { showGenderMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Male") },
+                onClick = {
+                    gender = "Male"
+                    showGenderMenu = false
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Female") },
+                onClick = {
+                    gender = "Female"
+                    showGenderMenu = false
+                }
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = Color.White,
+                    shape = RoundedCornerShape(4.dp)
+                )
+                .border(BorderStroke(1.dp, Color.Gray), shape = RoundedCornerShape(4.dp))
+                .padding(16.dp)
+                .clickable { showGenderMenu = true }
+        ) {
+            if (gender == "") {
+                Text(
+                    text = "Gender (Male/Female)",
+                    color = Color.Black
+                )
+            } else {
+                Text(
+                    text = gender,
+                    color = Color.Black
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -143,9 +209,12 @@ fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit
                         val birthDate = SimpleDateFormat(
                             "yyyy-MM-dd",
                             Locale.getDefault()
-                        ).parse(birthDateInput)
+                        ).parse(
+                            birthDateInput?.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                                .toString()
+                        )
                         val result =
-                            makeSignUpRequest(name, email, password, birthDate, sex, weight, height)
+                            makeSignUpRequest(name, email, password, birthDate, gender, weight, height)
                         withContext(Dispatchers.Main) {
                             signUpResult = result
                             if (result == "Success") {
@@ -213,7 +282,7 @@ private suspend fun makeSignUpRequest(
     email: String,
     password: String,
     birthDate: Date?,
-    sex: String,
+    gender: String,
     weight: String?,
     height: String?
 ): String {
@@ -238,9 +307,9 @@ private suspend fun makeSignUpRequest(
             put("password", password)
             put("name", name)
             put("birth_date", birthDateStr) // Send birthDate in the correct format
-            put("sex", sex)
-            weight?.let { put("weight", it.toInt()) } // Optional field, parse as Int
-            height?.let { put("height", it.toInt()) }   // Optional field, parse as Int
+            put("sex", gender)
+            weight?.toIntOrNull()?.let { put("weight", it) }
+            height?.toIntOrNull()?.let { put("height", it) }
         }
 
         // Write the JSON data to the output stream
