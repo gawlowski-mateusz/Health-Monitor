@@ -2,31 +2,52 @@ package com.mateusz.frontend
 
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.util.Date
 
 @Composable
 fun WalkingSessionsScreen(
@@ -35,15 +56,15 @@ fun WalkingSessionsScreen(
     selectedDate: LocalDate? = null
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     var walkingSessions by remember { mutableStateOf<List<Map<String, Any>>?>(null) }
     var walkingSessionCount = 0
 
     // Fetch walking sessions when the screen is first composed
-    LaunchedEffect(Unit) {
+    LaunchedEffect(selectedDate) {  // This will re-trigger when selectedDate changes
         val formattedDate = selectedDate?.format(DateTimeFormatter.ISO_DATE)
         val result = fetchWalkingSessions(context, formattedDate)
         walkingSessions = result
+        walkingSessionCount = 0  // Reset counter when new data is fetched
     }
 
     Surface(
@@ -54,32 +75,67 @@ fun WalkingSessionsScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Upper 75% scrollable area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(0.80f)
-                    .verticalScroll(rememberScrollState())
+                    .weight(0.20f)
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,  // Changed to Start alignment
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { onOverviewChoice() },
+                        modifier = Modifier
+                            .weight(0.2f)
+                            .padding(end = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+
                     Text(
                         text = "Walking sessions",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(24.dp)
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.weight(0.8f)  // 90% of the space
                     )
+                }
+            }
 
+            // Lower 25% non-scrollable area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.80f)
+                    .padding(top = 32.dp, start = 16.dp, end = 16.dp, bottom = 64.dp)
+                    .verticalScroll(rememberScrollState()),
+//                contentAlignment = Alignment.Center  // Add this line to center the content
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),  // Add this modifier
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center  // Add this line to center vertically
+                ) {
                     if (!walkingSessions.isNullOrEmpty()) {
-                        Column {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),  // Add this modifier
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             walkingSessions?.forEach { session ->
                                 walkingSessionCount++
 
                                 Row(
-                                    horizontalArrangement = Arrangement.Center,
                                     modifier = Modifier
-                                        .padding(8.dp)
+                                        .fillMaxWidth()  // Add this modifier
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.Center,
                                 ) {
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally
@@ -142,11 +198,11 @@ fun WalkingSessionsScreen(
                             modifier = Modifier
                                 .width(300.dp)
                                 .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-                                .height(56.dp),  // Adjust height to match the screenshot
-                            shape = RoundedCornerShape(25),  // Rounded corners to match the screenshot
+                                .height(56.dp),
+                            shape = RoundedCornerShape(25),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
-                                contentColor = colorResource(id = R.color.white)  // White text color
+                                containerColor = colorResource(id = R.color.light_blue),
+                                contentColor = colorResource(id = R.color.white)
                             )
                         ) {
                             Text(
@@ -155,66 +211,6 @@ fun WalkingSessionsScreen(
                                 fontWeight = FontWeight.Medium
                             )
                         }
-                    }
-                }
-            }
-
-            // Lower 25% non-scrollable area
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.20f)
-                    .padding(horizontal = 32.dp, vertical = 16.dp),
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Refresh Button
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                val result = fetchWalkingSessions(context, selectedDate.toString())
-                                walkingSessions = result
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.light_blue),
-                            contentColor = colorResource(id = R.color.white)
-                        )
-                    ) {
-                        Text(
-                            "Refresh",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Overview Button
-                    OutlinedButton(
-                        onClick = {
-                            onOverviewChoice()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(50),
-                        border = BorderStroke(
-                            2.dp,
-                            color = colorResource(id = R.color.light_blue)
-                        )
-                    ) {
-                        Text(
-                            "Overview screen",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colorResource(id = R.color.light_blue)
-                        )
                     }
                 }
             }
@@ -344,6 +340,7 @@ fun WalkingCard(value: Int, unit: String, description: String) {
 fun PreviewWalkingSessionsScreen() {
     WalkingSessionsScreen(
         onOverviewChoice = {},
-        onAddNewWalkingSessionChoice = {}
+        onAddNewWalkingSessionChoice = {},
+        selectedDate = null
     )
 }

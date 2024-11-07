@@ -30,22 +30,24 @@ fun MyApp() {
                 onNavigateToHomeScreen = { navController.navigate("home") }
             )
         }
+
         composable("login") {
             LoginScreen(
                 onLoginSuccess = { navController.navigate("overview") },
                 onNavigateToHomeScreen = { navController.navigate("home") }
             )
         }
+
         composable("home") {
             HomeScreen(
                 onLoginPanelChoice = { navController.navigate("login") },
                 onSignupPanelChoice = { navController.navigate("signup") }
             )
         }
+
         composable("overview") {
             OverviewScreen(
                 onViewProfileChoice = {navController.navigate("profile_view")},
-                onEditProfileChoice = {navController.navigate("edit_profile")},
                 onLogOutChoice = {navController.navigate("home")},
                 onEditStepsChoice = {navController.navigate("edit_steps")},
                 onWalkingSessionsChoice = { date ->
@@ -59,23 +61,28 @@ fun MyApp() {
                     navController.navigate("cycling_sessions") },
                 )
         }
+
         composable("profile_view") {
             ProfileViewScreen(
                 onGoBackChoice = {navController.navigate("overview")},
-            )
+                onEditProfileChoice = {navController.navigate("edit_profile")},
+                )
         }
+
         composable("edit_profile") {
             EditProfileScreen(
-                onSaveChoice = {navController.navigate("overview")},
-                onCancelChoice = {navController.navigate("overview")}
+                onSaveChoice = {navController.navigate("profile_view")},
+                onCancelChoice = {navController.navigate("profile_view")}
             )
         }
+
         composable("edit_steps") {
             EditStepsScreen(
                 onSaveChoice = {navController.navigate("overview")},
                 onCancelChoice = {navController.navigate("overview")}
             )
         }
+
         composable("walking_sessions") {
             val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
             val selectedDate = if (!dateStr.isNullOrEmpty()) {
@@ -85,15 +92,38 @@ fun MyApp() {
             WalkingSessionsScreen(
                 selectedDate = selectedDate,
                 onOverviewChoice = { navController.navigate("overview") },
-                onAddNewWalkingSessionChoice = { navController.navigate("new_walking_session") }
+                onAddNewWalkingSessionChoice = {
+                    navController.currentBackStackEntry?.savedStateHandle?.set("selected_date", dateStr)
+                    navController.navigate("new_walking_session")
+                }
             )
         }
+
         composable("new_walking_session") {
+            val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
+            val selectedDate = if (!dateStr.isNullOrEmpty()) {
+                LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE)
+            } else LocalDate.now()
+
             NewWalkingSessionScreen(
-                onSaveChoice = {navController.navigate("walking_sessions")},
-                onCancelChoice = {navController.navigate("walking_sessions")}
-            )
+                onSaveChoice = { date ->
+                    // Navigate back and update the date
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        "selected_date",
+                        selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                    )
+                    navController.navigateUp()
+                }
+            ) { date ->
+                // Navigate back and update the date
+                navController.previousBackStackEntry?.savedStateHandle?.set(
+                    "selected_date",
+                    selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                )
+                navController.navigateUp()
+            }
         }
+
         composable("running_sessions") {
             val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
             val selectedDate = if (!dateStr.isNullOrEmpty()) {
@@ -102,16 +132,39 @@ fun MyApp() {
 
             RunningSessionsScreen(
                 selectedDate = selectedDate,
-                onOverviewChoice = {navController.navigate("overview")},
-                onAddNewRunningSessionChoice = {navController.navigate("new_running_session")}
+                onOverviewChoice = { navController.navigate("overview") },
+                onAddNewRunningSessionChoice = {
+                    navController.currentBackStackEntry?.savedStateHandle?.set("selected_date", dateStr)
+                    navController.navigate("new_running_session")
+                }
             )
         }
+
         composable("new_running_session") {
+            val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
+            val selectedDate = if (!dateStr.isNullOrEmpty()) {
+                LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE)
+            } else LocalDate.now()
+
             NewRunningSessionScreen(
-                onSaveChoice = {navController.navigate("running_sessions")},
-                onCancelChoice = {navController.navigate("running_sessions")}
-            )
+                onSaveChoice = { date ->
+                    // Navigate back and update the date
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        "selected_date",
+                        selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                    )
+                    navController.navigateUp()
+                }
+            ) { date ->
+                // Navigate back and update the date
+                navController.previousBackStackEntry?.savedStateHandle?.set(
+                    "selected_date",
+                    selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                )
+                navController.navigateUp()
+            }
         }
+
         composable("cycling_sessions") {
             val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
             val selectedDate = if (!dateStr.isNullOrEmpty()) {
@@ -120,15 +173,37 @@ fun MyApp() {
 
             CyclingSessionsScreen(
                 selectedDate = selectedDate,
-                onOverviewChoice = {navController.navigate("overview")},
-                onAddNewCyclingSessionChoice = {navController.navigate("new_cycling_session")}
+                onOverviewChoice = { navController.navigate("overview") },
+                onAddNewCyclingSessionChoice = {
+                    navController.currentBackStackEntry?.savedStateHandle?.set("selected_date", dateStr)
+                    navController.navigate("new_cycling_session")
+                }
             )
         }
+
         composable("new_cycling_session") {
+            val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
+            val selectedDate = if (!dateStr.isNullOrEmpty()) {
+                LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE)
+            } else LocalDate.now()
+
             NewCyclingSessionScreen(
-                onSaveChoice = {navController.navigate("cycling_sessions")},
-                onCancelChoice = {navController.navigate("cycling_sessions")}
-            )
+                onSaveChoice = { date ->
+                    // Navigate back and update the date
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        "selected_date",
+                        selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                    )
+                    navController.navigateUp()
+                }
+            ) { date ->
+                // Navigate back and update the date
+                navController.previousBackStackEntry?.savedStateHandle?.set(
+                    "selected_date",
+                    selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                )
+                navController.navigateUp()
+            }
         }
     }
 }
