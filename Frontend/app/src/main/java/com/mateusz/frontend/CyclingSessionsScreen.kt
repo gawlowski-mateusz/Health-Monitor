@@ -60,11 +60,11 @@ fun CyclingSessionsScreen(
     var cyclingSessionCount = 0
 
     // Fetch cycling sessions when the screen is first composed
-    LaunchedEffect(selectedDate) {  // Updated to match WalkingSessionsScreen
+    LaunchedEffect(selectedDate) {
         val formattedDate = selectedDate?.format(DateTimeFormatter.ISO_DATE)
         val result = fetchCyclingSessions(context, formattedDate)
         cyclingSessions = result
-        cyclingSessionCount = 0  // Reset counter when new data is fetched
+        cyclingSessionCount = 0
     }
 
     Surface(
@@ -75,7 +75,6 @@ fun CyclingSessionsScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header section (20%)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -110,7 +109,6 @@ fun CyclingSessionsScreen(
                 }
             }
 
-            // Content section (80%)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -233,7 +231,7 @@ private suspend fun fetchCyclingSessions(
             // Retrieve the JWT token from SharedPreferences
             val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
             val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: return@withContext null // Return null if token is not found
+                ?: return@withContext null
 
             // Add the JWT token to the Authorization header
             connection.setRequestProperty("Authorization", "Bearer $jwtToken")

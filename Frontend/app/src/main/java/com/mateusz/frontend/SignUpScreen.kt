@@ -7,7 +7,15 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -17,7 +25,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,17 +46,22 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import org.json.JSONObject
 import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
-fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) {
+fun SignUpScreen(
+    onSignUpSuccess: () -> Unit,
+    onNavigateToHomeScreen: () -> Unit
+) {
     val context = LocalContext.current
     var signUpResult by remember { mutableStateOf("") }
     val calendar = Calendar.getInstance()
@@ -66,10 +83,10 @@ fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
-            painter = painterResource(id = R.drawable.logo_simple),  // Assuming logo.png is placed in res/drawable
+            painter = painterResource(id = R.drawable.logo_simple),
             contentDescription = "App Logo",
             modifier = Modifier
-                .size(150.dp)  // Adjust size accordingly
+                .size(150.dp)
                 .padding(bottom = 8.dp),
             contentScale = ContentScale.Fit
         )
@@ -237,11 +254,11 @@ fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp)
-                .height(56.dp),  // Adjust height to match the screenshot
-            shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                .height(56.dp),
+            shape = RoundedCornerShape(50),
             colors = ButtonDefaults.buttonColors(
-                containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
-                contentColor = colorResource(id = R.color.white)  // White text color
+                containerColor = colorResource(id = R.color.light_blue),
+                contentColor = colorResource(id = R.color.white)
             )
         ) {
             Text(
@@ -260,18 +277,18 @@ fun SignUpScreen(onSignUpSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp)
-                .height(56.dp),  // Adjust height to match the screenshot
-            shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                .height(56.dp),
+            shape = RoundedCornerShape(50),
             border = BorderStroke(
                 2.dp,
                 color = colorResource(id = R.color.light_blue)
-            )  // Using custom color
+            )
         ) {
             Text(
                 "Home Screen",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
-                color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                color = colorResource(id = R.color.light_blue)
             )
         }
     }
@@ -286,7 +303,7 @@ private suspend fun makeSignUpRequest(
     weight: String?,
     height: String?
 ): String {
-    val url = URL("http://10.0.2.2:8000/register") // Replace with your actual API URL
+    val url = URL("http://10.0.2.2:8000/register")
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection
@@ -297,7 +314,6 @@ private suspend fun makeSignUpRequest(
         connection.setRequestProperty("Content-Type", "application/json")
         connection.doOutput = true
 
-        // Convert Date to the correct format (YYYY-MM-DD)
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val birthDateStr = birthDate?.let { sdf.format(it) }
 
@@ -306,7 +322,7 @@ private suspend fun makeSignUpRequest(
             put("email", email)
             put("password", password)
             put("name", name)
-            put("birth_date", birthDateStr) // Send birthDate in the correct format
+            put("birth_date", birthDateStr)
             put("sex", gender)
             weight?.toIntOrNull()?.let { put("weight", it) }
             height?.toIntOrNull()?.let { put("height", it) }

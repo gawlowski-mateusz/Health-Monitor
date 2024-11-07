@@ -64,7 +64,6 @@ fun ProfileViewScreen(
     LaunchedEffect(Unit) {
         val userData = fetchUserData(context)
         userData?.let { user ->
-            // Update all state variables with fetched data
             name = user["name"] as? String
             email = user["email"] as? String
             birthDate = user["birth_date"] as? String
@@ -113,7 +112,7 @@ fun ProfileViewScreen(
                     fontStyle = FontStyle.Normal,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.headlineMedium,
-                    textAlign = TextAlign.Center,  // Centers the text within its weight
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
                         .weight(0.8f)
                 )
@@ -231,51 +230,6 @@ fun ProfileViewScreen(
                     disabledLabelColor = Color.Black
                 )
             )
-
-            // Edit profile Button
-//            Button(
-//                onClick = {
-//                    onEditProfileChoice()
-//                },
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .padding(top = 42.dp, start = 32.dp, end = 32.dp)
-//                    .height(56.dp),
-//                shape = RoundedCornerShape(50),
-//                colors = ButtonDefaults.buttonColors(
-//                    containerColor = colorResource(id = R.color.light_blue),
-//                    contentColor = colorResource(id = R.color.white)
-//                )
-//            ) {
-//                Text(
-//                    "Edit profile",
-//                    fontSize = 18.sp,
-//                    fontWeight = FontWeight.Medium
-//                )
-//            }
-//
-//            Spacer(modifier = Modifier.height(8.dp))
-//
-//            // Cancel Button
-//            OutlinedButton(
-//                onClick = { onGoBackChoice() },
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .padding(horizontal = 32.dp)
-//                    .height(56.dp),
-//                shape = RoundedCornerShape(50),
-//                border = BorderStroke(
-//                    2.dp,
-//                    color = colorResource(id = R.color.light_blue)
-//                )
-//            ) {
-//                Text(
-//                    "Go back",
-//                    fontSize = 18.sp,
-//                    fontWeight = FontWeight.Medium,
-//                    color = colorResource(id = R.color.light_blue)
-//                )
-//            }
         }
     }
 }
@@ -284,7 +238,7 @@ fun getUserIdFromJwt(jwt: String): String? {
     try {
         // Split the JWT into its parts
         val parts = jwt.split(".")
-        if (parts.size != 3) return null // Not a valid JWT
+        if (parts.size != 3) return null
 
         // Decode the payload (the second part of the JWT)
         val payload = parts[1]

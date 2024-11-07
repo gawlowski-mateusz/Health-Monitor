@@ -60,11 +60,11 @@ fun WalkingSessionsScreen(
     var walkingSessionCount = 0
 
     // Fetch walking sessions when the screen is first composed
-    LaunchedEffect(selectedDate) {  // This will re-trigger when selectedDate changes
+    LaunchedEffect(selectedDate) {
         val formattedDate = selectedDate?.format(DateTimeFormatter.ISO_DATE)
         val result = fetchWalkingSessions(context, formattedDate)
         walkingSessions = result
-        walkingSessionCount = 0  // Reset counter when new data is fetched
+        walkingSessionCount = 0
     }
 
     Surface(
@@ -84,7 +84,7 @@ fun WalkingSessionsScreen(
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start,  // Changed to Start alignment
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
@@ -104,28 +104,26 @@ fun WalkingSessionsScreen(
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Start,
-                        modifier = Modifier.weight(0.8f)  // 90% of the space
+                        modifier = Modifier.weight(0.8f)
                     )
                 }
             }
 
-            // Lower 25% non-scrollable area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(0.80f)
                     .padding(top = 32.dp, start = 16.dp, end = 16.dp, bottom = 64.dp)
                     .verticalScroll(rememberScrollState()),
-//                contentAlignment = Alignment.Center  // Add this line to center the content
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),  // Add this modifier
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center  // Add this line to center vertically
+                    verticalArrangement = Arrangement.Center
                 ) {
                     if (!walkingSessions.isNullOrEmpty()) {
                         Column(
-                            modifier = Modifier.fillMaxWidth(),  // Add this modifier
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             walkingSessions?.forEach { session ->
@@ -133,7 +131,7 @@ fun WalkingSessionsScreen(
 
                                 Row(
                                     modifier = Modifier
-                                        .fillMaxWidth()  // Add this modifier
+                                        .fillMaxWidth()
                                         .padding(8.dp),
                                     horizontalArrangement = Arrangement.Center,
                                 ) {
@@ -236,7 +234,7 @@ private suspend fun fetchWalkingSessions(
             // Retrieve the JWT token from SharedPreferences
             val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
             val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: return@withContext null // Return null if token is not found
+                ?: return@withContext null
 
             // Add the JWT token to the Authorization header
             connection.setRequestProperty("Authorization", "Bearer $jwtToken")

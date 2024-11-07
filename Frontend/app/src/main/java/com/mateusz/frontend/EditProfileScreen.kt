@@ -3,11 +3,27 @@ package com.mateusz.frontend
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,8 +34,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +48,6 @@ import java.net.URL
 
 @Composable
 fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
-    // State variables to hold the values entered by the user (nullable by default)
     var height by remember { mutableStateOf<Int?>(null) }
     var weight by remember { mutableStateOf<Float?>(null) }
     var password by remember { mutableStateOf<String?>(null) }
@@ -64,7 +79,7 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
             OutlinedTextField(
                 value = height?.toString() ?: "",
                 onValueChange = {
-                    height = it.toIntOrNull() // Convert to Int or null if invalid
+                    height = it.toIntOrNull()
                 },
                 label = { Text("Height (cm)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -77,7 +92,7 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
             OutlinedTextField(
                 value = weight?.toString() ?: "",
                 onValueChange = {
-                    weight = it.toFloatOrNull() // Convert to Float or null if invalid
+                    weight = it.toFloatOrNull()
                 },
                 label = { Text("Weight (kg)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -117,11 +132,11 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 42.dp, start = 32.dp, end = 32.dp)
-                    .height(56.dp),  // Adjust height to match the screenshot
-                shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                    .height(56.dp),
+                shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
-                    contentColor = colorResource(id = R.color.white)  // White text color
+                    containerColor = colorResource(id = R.color.light_blue),
+                    contentColor = colorResource(id = R.color.white)
                 )
             ) {
                 Text(
@@ -141,18 +156,18 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp)
-                    .height(56.dp),  // Adjust height to match the screenshot
-                shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                    .height(56.dp),
+                shape = RoundedCornerShape(50),
                 border = BorderStroke(
                     2.dp,
                     color = colorResource(id = R.color.light_blue)
-                )  // Using custom color
+                )
             ) {
                 Text(
                     "Cancel",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium,
-                    color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                    color = colorResource(id = R.color.light_blue)
                 )
             }
         }
@@ -163,9 +178,9 @@ private suspend fun makeEditProfileRequest(
     height: Int?,
     weight: Float?,
     password: String?,
-    context: Context // Pass the context to access SharedPreferences
+    context: Context
 ): String {
-    val url = URL("http://10.0.2.2:8000/update-profile") // Replace with your actual API URL
+    val url = URL("http://10.0.2.2:8000/update-profile")
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection

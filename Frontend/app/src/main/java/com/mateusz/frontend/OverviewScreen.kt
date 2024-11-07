@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,12 +67,11 @@ fun OverviewScreen(
     onCyclingSessionsChoice: (LocalDate?) -> Unit,
 ) {
     val context = LocalContext.current
-    var loginResult by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
     var overviewData by remember { mutableStateOf<Map<String, Any>?>(null) }
-    var showMenu by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     val calendar = Calendar.getInstance()
+    var logoutResult by remember { mutableStateOf("") }
 
     // Fetch overview data when the screen is first composed
     LaunchedEffect(Unit) {
@@ -150,7 +150,21 @@ fun OverviewScreen(
                     )
                 }
 
-                IconButton(onClick = { onLogOutChoice() }) {
+                IconButton(onClick = {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val result = makeLogoutRequest(context)
+                        withContext(Dispatchers.Main) {
+                            logoutResult = result
+                            if (result == "User successfully logged out") {
+                                Toast.makeText(context, "Logout success!", Toast.LENGTH_SHORT)
+                                    .show()
+                                onLogOutChoice()
+                            } else {
+                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                }) {
                     Icon(
                         imageVector = Icons.Default.ExitToApp,
                         contentDescription = "Logout"
@@ -366,7 +380,7 @@ private fun parseOverviewData(response: String): Map<String, Any?>? {
 }
 
 private suspend fun makeLogoutRequest(context: Context): String {
-    val url = URL("http://10.0.2.2:8000/logout") // Replace with your actual API URL
+    val url = URL("http://10.0.2.2:8000/logout")
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection
@@ -428,7 +442,6 @@ fun StepsProgressBar(steps: Int, stepsGoal: Int) {
                 .clip(RoundedCornerShape(6.dp))
         )
 
-        // Display steps out of steps goal
         Text(text = "$steps out of $stepsGoal steps")
     }
 }
@@ -441,7 +454,7 @@ fun HealthCard(value: Any?, unit: String?, description: String?) {
             .padding(top = 4.dp, start = 8.dp, end = 8.dp)
             .height(100.dp),
         colors = CardDefaults.cardColors(
-            containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
+            containerColor = colorResource(id = R.color.light_blue),
             contentColor = colorResource(id = R.color.white)
         )
     ) {
@@ -474,13 +487,12 @@ fun HealthCard(value: Any?, unit: String?, description: String?) {
 @Composable
 fun NoActivityCard(
     activity: String,
-    modifier: Modifier = Modifier
-        .width(300.dp)
-        .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-        .height(100.dp)
 ) {
     Card(
-        modifier = modifier,
+        modifier = Modifier
+            .width(300.dp)
+            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
+            .height(100.dp),
         colors = CardDefaults.cardColors(
             containerColor = colorResource(id = R.color.light_blue),
             contentColor = colorResource(id = R.color.white)

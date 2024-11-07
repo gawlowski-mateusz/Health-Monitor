@@ -106,19 +106,17 @@ fun MyApp() {
             } else LocalDate.now()
 
             NewWalkingSessionScreen(
-                onSaveChoice = { date ->
-                    // Navigate back and update the date
+                onSaveChoice = {
                     navController.previousBackStackEntry?.savedStateHandle?.set(
                         "selected_date",
-                        selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                        selectedDate.format(DateTimeFormatter.ISO_DATE)
                     )
                     navController.navigateUp()
                 }
-            ) { date ->
-                // Navigate back and update the date
+            ) {
                 navController.previousBackStackEntry?.savedStateHandle?.set(
                     "selected_date",
-                    selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                    selectedDate.format(DateTimeFormatter.ISO_DATE)
                 )
                 navController.navigateUp()
             }
@@ -147,19 +145,17 @@ fun MyApp() {
             } else LocalDate.now()
 
             NewRunningSessionScreen(
-                onSaveChoice = { date ->
-                    // Navigate back and update the date
+                onSaveChoice = {
                     navController.previousBackStackEntry?.savedStateHandle?.set(
                         "selected_date",
-                        selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                        selectedDate.format(DateTimeFormatter.ISO_DATE)
                     )
                     navController.navigateUp()
                 }
-            ) { date ->
-                // Navigate back and update the date
+            ) {
                 navController.previousBackStackEntry?.savedStateHandle?.set(
                     "selected_date",
-                    selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                    selectedDate.format(DateTimeFormatter.ISO_DATE)
                 )
                 navController.navigateUp()
             }
@@ -188,19 +184,17 @@ fun MyApp() {
             } else LocalDate.now()
 
             NewCyclingSessionScreen(
-                onSaveChoice = { date ->
-                    // Navigate back and update the date
+                onSaveChoice = {
                     navController.previousBackStackEntry?.savedStateHandle?.set(
                         "selected_date",
-                        selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                        selectedDate.format(DateTimeFormatter.ISO_DATE)
                     )
                     navController.navigateUp()
                 }
-            ) { date ->
-                // Navigate back and update the date
+            ) {
                 navController.previousBackStackEntry?.savedStateHandle?.set(
                     "selected_date",
-                    selectedDate.format(DateTimeFormatter.ISO_DATE)  // Use selectedDate instead of date parameter
+                    selectedDate.format(DateTimeFormatter.ISO_DATE)
                 )
                 navController.navigateUp()
             }

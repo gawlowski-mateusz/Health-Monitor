@@ -52,7 +52,6 @@ fun NewCyclingSessionScreen (
     onSaveChoice: (LocalDate?) -> Unit,
     onCancelChoice: (LocalDate?) -> Unit
 ) {
-    // State variables to hold the values entered by the user (nullable by default)
     var duration by remember { mutableIntStateOf(0) }
     var averagePulse by remember { mutableIntStateOf(0) }
     val password by remember { mutableStateOf<String?>(null) }
@@ -87,7 +86,7 @@ fun NewCyclingSessionScreen (
             OutlinedTextField(
                 value = averagePulse.toString(),
                 onValueChange = {
-                    averagePulse = it.toInt() // Convert to Int
+                    averagePulse = it.toInt()
                 },
                 label = { Text("Average pulse") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -100,7 +99,7 @@ fun NewCyclingSessionScreen (
             OutlinedTextField(
                 value = duration.toString(),
                 onValueChange = {
-                    duration = it.toInt() // Convert to Int
+                    duration = it.toInt()
                 },
                 label = { Text("Duration") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -110,7 +109,6 @@ fun NewCyclingSessionScreen (
             // Save Button
             Button(
                 onClick = {
-                    // Launch a coroutine to perform the network request
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeAddNewCyclingSessionRequest(duration, averagePulse, password, context)
                         withContext(Dispatchers.Main) {
@@ -126,11 +124,11 @@ fun NewCyclingSessionScreen (
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 42.dp, start = 32.dp, end = 32.dp)
-                    .height(56.dp),  // Adjust height to match the screenshot
-                shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                    .height(56.dp),
+                shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
-                    contentColor = colorResource(id = R.color.white)  // White text color
+                    containerColor = colorResource(id = R.color.light_blue),
+                    contentColor = colorResource(id = R.color.white)
                 )
             ) {
                 Text(
@@ -150,18 +148,18 @@ fun NewCyclingSessionScreen (
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp)
-                    .height(56.dp),  // Adjust height to match the screenshot
-                shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                    .height(56.dp),
+                shape = RoundedCornerShape(50),
                 border = BorderStroke(
                     2.dp,
                     color = colorResource(id = R.color.light_blue)
-                )  // Using custom color
+                )
             ) {
                 Text(
                     "Cancel",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium,
-                    color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                    color = colorResource(id = R.color.light_blue)
                 )
             }
         }
@@ -172,9 +170,9 @@ private suspend fun makeAddNewCyclingSessionRequest(
     duration: Int,
     averagePulse: Int,
     password: String?,
-    context: Context // Pass the context to access SharedPreferences
+    context: Context
 ): String {
-    val url = URL("http://10.0.2.2:8000/cycling") // Replace with your actual API URL
+    val url = URL("http://10.0.2.2:8000/cycling")
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection

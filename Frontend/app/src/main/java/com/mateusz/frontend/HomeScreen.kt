@@ -2,7 +2,14 @@ package com.mateusz.frontend
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -12,13 +19,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun HomeScreen(onLoginPanelChoice: () -> Unit, onSignupPanelChoice: () -> Unit) {
@@ -29,39 +36,36 @@ fun HomeScreen(onLoginPanelChoice: () -> Unit, onSignupPanelChoice: () -> Unit) 
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Display the logo at the top
         Image(
-            painter = painterResource(id = R.drawable.logo_full),  // Assuming logo.png is placed in res/drawable
+            painter = painterResource(id = R.drawable.logo_full),
             contentDescription = "App Logo",
             modifier = Modifier
-                .size(300.dp)  // Adjust size accordingly
+                .size(300.dp)
                 .padding(top = 32.dp, bottom = 24.dp),
             contentScale = ContentScale.Fit
         )
 
-        // Subtitle
         Text(
             text = "The Smart Platform for Activity Tracking",
             fontSize = 16.sp,
             color = colorResource(id = R.color.light_blue),
-            textAlign = TextAlign.Center,  // Centers the text content
+            textAlign = TextAlign.Center,
             modifier = Modifier
-                .fillMaxWidth()  // Makes the text take the full width of the parent
+                .fillMaxWidth()
                 .padding(bottom = 80.dp)
                 .padding(horizontal = 32.dp)
         )
 
-        // Login Button - filled style
         Button(
             onClick = { onLoginPanelChoice() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp)
-                .height(56.dp),  // Adjust height to match the screenshot
-            shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                .height(56.dp),
+            shape = RoundedCornerShape(50),
             colors = ButtonDefaults.buttonColors(
-                containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
-                contentColor = colorResource(id = R.color.white)  // White text color
+                containerColor = colorResource(id = R.color.light_blue),
+                contentColor = colorResource(id = R.color.white)
             )
         ) {
             Text(
@@ -71,24 +75,22 @@ fun HomeScreen(onLoginPanelChoice: () -> Unit, onSignupPanelChoice: () -> Unit) 
             )
         }
 
-        // Spacing between buttons
         Spacer(modifier = Modifier.height(16.dp))
 
-        // "Register" Button - outlined style
         OutlinedButton(
             onClick = { onSignupPanelChoice() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp)
-                .height(56.dp),  // Adjust height to match the screenshot
-            shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
-            border = BorderStroke(2.dp, color = colorResource(id = R.color.light_blue))  // Using custom color
+                .height(56.dp),
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(2.dp, color = colorResource(id = R.color.light_blue))
         ) {
             Text(
                 "Register",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
-                color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                color = colorResource(id = R.color.light_blue)
             )
         }
     }

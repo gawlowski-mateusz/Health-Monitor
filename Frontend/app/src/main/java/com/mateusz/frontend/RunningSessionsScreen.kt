@@ -60,11 +60,11 @@ fun RunningSessionsScreen(
     var runningSessionCount = 0
 
     // Fetch running sessions when the screen is first composed
-    LaunchedEffect(selectedDate) {  // Updated to match WalkingSessionsScreen
+    LaunchedEffect(selectedDate) {
         val formattedDate = selectedDate?.format(DateTimeFormatter.ISO_DATE)
         val result = fetchRunningSessions(context, formattedDate)
         runningSessions = result
-        runningSessionCount = 0  // Reset counter when new data is fetched
+        runningSessionCount = 0
     }
 
     Surface(
@@ -75,7 +75,6 @@ fun RunningSessionsScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header section (20%)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -110,7 +109,6 @@ fun RunningSessionsScreen(
                 }
             }
 
-            // Content section (80%)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

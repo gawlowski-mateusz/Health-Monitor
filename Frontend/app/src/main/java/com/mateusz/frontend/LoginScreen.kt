@@ -4,7 +4,14 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -12,7 +19,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -34,7 +45,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 @Composable
-fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) {
+fun LoginScreen(
+    onLoginSuccess: () -> Unit,
+    onNavigateToHomeScreen: () -> Unit
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
@@ -48,12 +62,11 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Display the logo at the top
         Image(
-            painter = painterResource(id = R.drawable.logo_simple),  // Assuming logo.png is placed in res/drawable
+            painter = painterResource(id = R.drawable.logo_simple),
             contentDescription = "App Logo",
             modifier = Modifier
-                .size(200.dp), // Adjust size accordingly
+                .size(200.dp),
             contentScale = ContentScale.Fit
         )
 
@@ -83,7 +96,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
 
         Button(
             onClick = {
-                // Launch a coroutine to perform the network request
                 CoroutineScope(Dispatchers.IO).launch {
                     val result = makeLoginRequest(email, password, context)
                     withContext(Dispatchers.Main) {
@@ -99,11 +111,11 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 36.dp, start = 32.dp, end = 32.dp)
-                .height(56.dp),  // Adjust height to match the screenshot
-            shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                .height(56.dp),
+            shape = RoundedCornerShape(50),
             colors = ButtonDefaults.buttonColors(
-                containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
-                contentColor = colorResource(id = R.color.white)  // White text color
+                containerColor = colorResource(id = R.color.light_blue),
+                contentColor = colorResource(id = R.color.white)
             )
         ) {
             Text(
@@ -112,7 +124,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
                 fontWeight = FontWeight.Medium
             )
         }
-
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -123,18 +134,18 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToHomeScreen: () -> Unit) 
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp)
-                .height(56.dp),  // Adjust height to match the screenshot
-            shape = RoundedCornerShape(50),  // Rounded corners to match the screenshot
+                .height(56.dp),
+            shape = RoundedCornerShape(50),
             border = BorderStroke(
                 2.dp,
                 color = colorResource(id = R.color.light_blue)
-            )  // Using custom color
+            )
         ) {
             Text(
                 "Home Screen",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
-                color = colorResource(id = R.color.light_blue)  // White text for outlined button
+                color = colorResource(id = R.color.light_blue)
             )
         }
     }
@@ -145,7 +156,7 @@ private suspend fun makeLoginRequest(
     password: String,
     context: Context
 ): String {
-    val url = URL("http://10.0.2.2:8000/login") // Replace with your actual login API URL
+    val url = URL("http://10.0.2.2:8000/login")
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection
@@ -176,10 +187,8 @@ private suspend fun makeLoginRequest(
             val response = connection.inputStream.bufferedReader().use { it.readText() }
             val jsonResponse = JSONObject(response)
 
-            // Extract the token
             val accessToken = jsonResponse.getString("access_token")
 
-            // Save the token in SharedPreferences
             val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
             sharedPreferences.edit().putString("access_token", accessToken).apply()
 
@@ -195,11 +204,11 @@ private suspend fun makeLoginRequest(
     }
 }
 
-
 @Preview(showBackground = true)
 @Composable
 fun PreviewLoginScreen() {
-    LoginScreen(onLoginSuccess = { /*TODO*/ }) {
-
-    }
+    LoginScreen(
+        onLoginSuccess = {},
+        onNavigateToHomeScreen = {}
+    )
 }
