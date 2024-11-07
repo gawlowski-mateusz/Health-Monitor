@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,9 +48,15 @@ fun MyApp() {
                 onEditProfileChoice = {navController.navigate("edit_profile")},
                 onLogOutChoice = {navController.navigate("home")},
                 onEditStepsChoice = {navController.navigate("edit_steps")},
-                onWalkingSessionsChoice = {navController.navigate("walking_sessions")},
-                onRunningSessionsChoice = {navController.navigate("running_sessions")},
-                onCyclingSessionsChoice = {navController.navigate("cycling_sessions")},
+                onWalkingSessionsChoice = { date ->
+                    navController.currentBackStackEntry?.savedStateHandle?.set("selected_date", date?.format(DateTimeFormatter.ISO_DATE))
+                    navController.navigate("walking_sessions") },
+                onRunningSessionsChoice = { date ->
+                    navController.currentBackStackEntry?.savedStateHandle?.set("selected_date", date?.format(DateTimeFormatter.ISO_DATE))
+                    navController.navigate("running_sessions") },
+                onCyclingSessionsChoice = {date ->
+                    navController.currentBackStackEntry?.savedStateHandle?.set("selected_date", date?.format(DateTimeFormatter.ISO_DATE))
+                    navController.navigate("cycling_sessions") },
                 )
         }
         composable("profile_view") {
@@ -69,9 +77,15 @@ fun MyApp() {
             )
         }
         composable("walking_sessions") {
+            val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
+            val selectedDate = if (!dateStr.isNullOrEmpty()) {
+                LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE)
+            } else null
+
             WalkingSessionsScreen(
-                onOverviewChoice = {navController.navigate("overview")},
-                onAddNewWalkingSessionChoice = {navController.navigate("new_walking_session")}
+                selectedDate = selectedDate,
+                onOverviewChoice = { navController.navigate("overview") },
+                onAddNewWalkingSessionChoice = { navController.navigate("new_walking_session") }
             )
         }
         composable("new_walking_session") {
@@ -81,7 +95,13 @@ fun MyApp() {
             )
         }
         composable("running_sessions") {
+            val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
+            val selectedDate = if (!dateStr.isNullOrEmpty()) {
+                LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE)
+            } else null
+
             RunningSessionsScreen(
+                selectedDate = selectedDate,
                 onOverviewChoice = {navController.navigate("overview")},
                 onAddNewRunningSessionChoice = {navController.navigate("new_running_session")}
             )
@@ -93,7 +113,13 @@ fun MyApp() {
             )
         }
         composable("cycling_sessions") {
+            val dateStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("selected_date")
+            val selectedDate = if (!dateStr.isNullOrEmpty()) {
+                LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE)
+            } else null
+
             CyclingSessionsScreen(
+                selectedDate = selectedDate,
                 onOverviewChoice = {navController.navigate("overview")},
                 onAddNewCyclingSessionChoice = {navController.navigate("new_cycling_session")}
             )

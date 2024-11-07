@@ -40,6 +40,26 @@ fun ProfileViewScreen(onGoBackChoice: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // Fetch user data when the screen is first composed
+    LaunchedEffect(Unit) {
+        val userData = fetchUserData(context)
+        userData?.let { user ->
+            // Update all state variables with fetched data
+            name = user["name"] as? String
+            email = user["email"] as? String
+            birthDate = user["birth_date"] as? String
+            gender = user["sex"] as? String
+            weight = (user["weight"] as? Double)?.toFloat()
+            height = user["height"] as? Int
+        } ?: run {
+            Toast.makeText(
+                context,
+                "Failed to fetch user data",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color.White
@@ -245,7 +265,7 @@ fun getUserIdFromJwt(jwt: String): String? {
     }
 }
 
-private suspend fun fetchUserData(context: Context): Map<String, Any>? {
+private suspend fun fetchUserData(context: Context): Map<String, Any?>? {
     return withContext(Dispatchers.IO) {
         // Retrieve JWT token from SharedPreferences
         val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
@@ -285,16 +305,16 @@ private suspend fun fetchUserData(context: Context): Map<String, Any>? {
     }
 }
 
-private fun parseUserData(response: String): Map<String, Any>? {
+private fun parseUserData(response: String): Map<String, Any?>? {
     return try {
         val jsonResponse = JSONObject(response)
         mapOf(
             "birth_date" to jsonResponse.getString("birth_date"),
             "email" to jsonResponse.getString("email"),
-            "height" to jsonResponse.getInt("height"),
+            "height" to jsonResponse.opt("height") as? Int,
             "name" to jsonResponse.getString("name"),
             "sex" to jsonResponse.getString("sex"),
-            "weight" to jsonResponse.getDouble("weight")
+            "weight" to jsonResponse.opt("weight") as? Double
         )
     } catch (e: Exception) {
         e.printStackTrace()

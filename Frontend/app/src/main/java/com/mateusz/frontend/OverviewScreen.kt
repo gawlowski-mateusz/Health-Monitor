@@ -50,17 +50,25 @@ fun OverviewScreen(
     onEditProfileChoice: () -> Unit,
     onLogOutChoice: () -> Unit,
     onEditStepsChoice: () -> Unit,
-    onWalkingSessionsChoice: () -> Unit,
-    onRunningSessionsChoice: () -> Unit,
-    onCyclingSessionsChoice: () -> Unit,
+    onWalkingSessionsChoice: (LocalDate?) -> Unit,
+    onRunningSessionsChoice: (LocalDate?) -> Unit,
+    onCyclingSessionsChoice: (LocalDate?) -> Unit,
 ) {
     val context = LocalContext.current
     var loginResult by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
     var overviewData by remember { mutableStateOf<Map<String, Any>?>(null) }
     var showMenu by remember { mutableStateOf(false) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     val calendar = Calendar.getInstance()
+
+    // Fetch overview data when the screen is first composed
+    LaunchedEffect(Unit) {
+        val result = fetchOverviewData(
+            context, selectedDate?.format(DateTimeFormatter.ISO_DATE).toString()
+        )
+        overviewData = result as Map<String, Any>?
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -181,7 +189,7 @@ fun OverviewScreen(
                 modifier = Modifier
                     .width(300.dp)
                     .clickable {
-                        onWalkingSessionsChoice()
+                        onWalkingSessionsChoice(selectedDate)
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -208,7 +216,7 @@ fun OverviewScreen(
                 modifier = Modifier
                     .width(300.dp)
                     .clickable {
-                        onRunningSessionsChoice()
+                        onRunningSessionsChoice(selectedDate)
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -235,7 +243,7 @@ fun OverviewScreen(
                 modifier = Modifier
                     .width(300.dp)
                     .clickable {
-                        onCyclingSessionsChoice()
+                        onCyclingSessionsChoice(selectedDate)
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -256,13 +264,19 @@ fun OverviewScreen(
                     .padding(top = 16.dp),
                 horizontalArrangement = Arrangement.Center
             ) {
-//                Choose date button
-                // Create DatePickerDialog
                 val datePickerDialog = remember {
                     DatePickerDialog(
                         context,
                         { _, year, month, dayOfMonth ->
                             selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
+                            // Fetch data after date is selected
+                            coroutineScope.launch {
+                                val result = fetchOverviewData(
+                                    context,
+                                    selectedDate?.format(DateTimeFormatter.ISO_DATE)
+                                )
+                                overviewData = result as Map<String, Int>?
+                            }
                         },
                         calendar.get(Calendar.YEAR),
                         calendar.get(Calendar.MONTH),
@@ -328,7 +342,6 @@ fun OverviewScreen(
 }
 
 
-// Modify the function to accept a date parameter
 private suspend fun fetchOverviewData(
     context: Context,
     selectedDate: String? = null

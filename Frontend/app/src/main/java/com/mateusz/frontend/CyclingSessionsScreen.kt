@@ -24,16 +24,26 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun CyclingSessionsScreen(
     onOverviewChoice: () -> Unit,
     onAddNewCyclingSessionChoice: () -> Unit,
+    selectedDate: LocalDate? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var cyclingSessions by remember { mutableStateOf<List<Map<String, Any>>?>(null) }
     var cyclingSessionCount = 0
+
+    // Fetch cycling sessions when the screen is first composed
+    LaunchedEffect(Unit) {
+        val formattedDate = selectedDate?.format(DateTimeFormatter.ISO_DATE)
+        val result = fetchCyclingSessions(context, formattedDate)
+        cyclingSessions = result
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -119,26 +129,31 @@ fun CyclingSessionsScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Add cycling session Button
-                    Button(
-                        onClick = {
-                            onAddNewCyclingSessionChoice()
-                        },
-                        modifier = Modifier
-                            .width(300.dp)
-                            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-                            .height(56.dp),  // Adjust height to match the screenshot
-                        shape = RoundedCornerShape(25),  // Rounded corners to match the screenshot
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
-                            contentColor = colorResource(id = R.color.white)  // White text color
-                        )
-                    ) {
-                        Text(
-                            "Add new cycling session",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                    val today = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+                    val selectedDateStr = selectedDate?.format(DateTimeFormatter.ISO_DATE)
+
+                    if (selectedDateStr == today) {
+                        // Add cycling session Button
+                        Button(
+                            onClick = {
+                                onAddNewCyclingSessionChoice()
+                            },
+                            modifier = Modifier
+                                .width(300.dp)
+                                .padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                                .height(56.dp),  // Adjust height to match the screenshot
+                            shape = RoundedCornerShape(25),  // Rounded corners to match the screenshot
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colorResource(id = R.color.light_blue),  // Custom blue background
+                                contentColor = colorResource(id = R.color.white)  // White text color
+                            )
+                        ) {
+                            Text(
+                                "Add new cycling session",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
@@ -207,9 +222,14 @@ fun CyclingSessionsScreen(
 }
 
 
-private suspend fun fetchCyclingSessions(context: Context): List<Map<String, Any>>? {
-    return withContext(Dispatchers.IO) { // Switch to IO dispatcher for network operation
-        val url = URL("http://10.0.2.2:8000/cycling") // Replace with your actual API URL
+private suspend fun fetchCyclingSessions(
+    context: Context,
+    selectedDate: String? = null
+): List<Map<String, Any>>? {
+    return withContext(Dispatchers.IO) {
+        val dateStr = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+        val url = URL("http://10.0.2.2:8000/cycling/$dateStr")
+
         val connection = url.openConnection() as HttpURLConnection
 
         try {
