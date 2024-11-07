@@ -15,6 +15,28 @@ from models import WalkingModel
 blp = Blueprint("Walking", "walking", description="Operations on Walking")
 
 
+@blp.route("/walking/<string:date>")
+class WalkingList(MethodView):
+    @jwt_required()
+    @blp.response(200, WalkingSchema(many=True))
+    def get(self, date):
+        user_id = get_jwt_identity()
+
+        activity = ActivityModel.query.filter_by(
+            user_id=user_id,
+            date=date
+        ).first()
+
+        if activity is None:
+            return []
+
+        training_id = activity.training_id
+        return WalkingModel.query.filter_by(
+            training_id=training_id,
+            date=date
+        ).all()
+
+
 @blp.route("/walking")
 class WalkingList(MethodView):
     @jwt_required()

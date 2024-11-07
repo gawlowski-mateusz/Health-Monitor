@@ -15,6 +15,28 @@ from models import CyclingModel
 blp = Blueprint("cycling", "cycling", description="Operations on cycling")
 
 
+@blp.route("/cycling/<string:date>")
+class WalkingList(MethodView):
+    @jwt_required()
+    @blp.response(200, CyclingSchema(many=True))
+    def get(self, date):
+        user_id = get_jwt_identity()
+
+        activity = ActivityModel.query.filter_by(
+            user_id=user_id,
+            date=date
+        ).first()
+
+        if activity is None:
+            return []
+
+        training_id = activity.training_id
+        return CyclingModel.query.filter_by(
+            training_id=training_id,
+            date=date
+        ).all()
+
+
 @blp.route("/cycling")
 class CyclingList(MethodView):
     @jwt_required()

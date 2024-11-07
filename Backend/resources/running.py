@@ -15,6 +15,28 @@ from models import RunningModel
 blp = Blueprint("Running", "running", description="Operations on running")
 
 
+@blp.route("/running/<string:date>")
+class WalkingList(MethodView):
+    @jwt_required()
+    @blp.response(200, RunningSchema(many=True))
+    def get(self, date):
+        user_id = get_jwt_identity()
+
+        activity = ActivityModel.query.filter_by(
+            user_id=user_id,
+            date=date
+        ).first()
+
+        if activity is None:
+            return []
+
+        training_id = activity.training_id
+        return RunningModel.query.filter_by(
+            training_id=training_id,
+            date=date
+        ).all()
+
+
 @blp.route("/running")
 class RunningList(MethodView):
     @jwt_required()
