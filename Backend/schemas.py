@@ -19,9 +19,9 @@ class UserLoginSchema(Schema):
 
 
 class UserUpdateSchema(Schema):
-    password = fields.Str(required=False)
-    weight = fields.Float(required=False)
-    height = fields.Int(required=False)
+    password = fields.Str(required=False, load_only=True)
+    height = fields.Int(required=False, allow_none=True)
+    weight = fields.Float(required=False, allow_none=True)
 
 
 class UserDeleteSchema(Schema):

@@ -2,6 +2,7 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from passlib.hash import pbkdf2_sha256
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt, get_jwt_identity
+from sqlalchemy.exc import SQLAlchemyError
 
 from db import db
 from blocklist import BLOCKLIST
@@ -24,8 +25,8 @@ class UserRegister(MethodView):
             name=user_data["name"],
             birth_date=user_data["birth_date"],
             sex=user_data["sex"],
-            weight=user_data.get("weight", None),  # Set to None if not present
-            height=user_data.get("height", None),  # Set to None if not present
+            weight=user_data.get("weight", None),
+            height=user_data.get("height", None),
         )
         db.session.add(user)
         db.session.commit()
@@ -42,6 +43,7 @@ class UserLogin(MethodView):
         if user and pbkdf2_sha256.verify(user_data["password"], user.password):
             access_token = create_access_token(identity=user.user_id, fresh=True)
             refresh_token = create_refresh_token(identity=user.user_id)
+
             return {"access_token": access_token, "refresh_token": refresh_token}, 200
 
         abort(401, message="Invalid credentials")
@@ -54,15 +56,25 @@ class UserUpdateProfile(MethodView):
     def patch(self, user_data):
         user_id = get_jwt_identity()
         user = UserModel.query.filter(UserModel.user_id == user_id).first()
-        # user = UserModel.query.filter(UserModel.user_id == 1).first()
 
-        user.password = pbkdf2_sha256.hash(user_data.get("password", user.password))
-        user.weight = user_data.get("weight", user.weight)
-        user.height = user_data.get("height", user.height)
+        if not user:
+            abort(404, message="User not found")
 
-        db.session.commit()
-        # db.session.add(user)
-        return {"message": "User updated successfully"}, 200
+        if "password" in user_data and user_data["password"]:
+            user.password = pbkdf2_sha256.hash(user_data["password"])
+
+        if "weight" in user_data and user_data["weight"] is not None:
+            user.weight = user_data["weight"]
+
+        if "height" in user_data and user_data["height"] is not None:
+            user.height = user_data["height"]
+
+        try:
+            db.session.commit()
+            return {"message": "User updated successfully"}, 200
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            abort(500, message=str(e))
 
 
 @blp.route("/refresh")

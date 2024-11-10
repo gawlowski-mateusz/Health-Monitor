@@ -3,6 +3,7 @@ import os
 from flask import Flask, jsonify
 from flask_smorest import Api
 from flask_jwt_extended import JWTManager
+from datetime import timedelta
 from resources.user import blp as user_blueprint
 from resources.activity import blp as activity_blueprint
 from resources.steps import blp as steps_blueprint
@@ -32,6 +33,9 @@ def create_app(db_url=None):
     api = Api(app)
     # app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") or secrets.SystemRandom().getrandbits(128)
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") or "120743901920933760412580320966469808258"
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)  # Token expires after 24 hours
+    app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)  # Refresh token expires after 30 days
+
     jwt = JWTManager(app)
 
     # @jwt.additional_claims_loader
@@ -77,21 +81,5 @@ def create_app(db_url=None):
     api.register_blueprint(walking_blueprint)
     api.register_blueprint(running_blueprint)
     api.register_blueprint(cycling_blueprint)
-
-    @app.route('/')
-    def hello_flask():  # put application's code here
-        return 'Flask run!'
-
-    @app.route('/test')
-    def test():  # put application's code here
-        return 'Hello World!'
-
-    @app.route('/api/auth/sign-up')
-    def sing_up():  # put application's code here
-        return 'Sign up successfully!'
-
-    @app.route('/api/auth/login')
-    def login():  # put application's code here
-        return 'Login successfully!'
 
     return app
