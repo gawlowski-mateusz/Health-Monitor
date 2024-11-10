@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
@@ -220,7 +221,7 @@ private suspend fun fetchCyclingSessions(
 ): List<Map<String, Any>>? {
     return withContext(Dispatchers.IO) {
         val dateStr = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-        val url = URL("http://10.0.2.2:8000/cycling/$dateStr")
+        val url = URL("${NetworkConfig.getBaseUrl()}/cycling/$dateStr")
 
         val connection = url.openConnection() as HttpURLConnection
 
@@ -231,7 +232,16 @@ private suspend fun fetchCyclingSessions(
             // Retrieve the JWT token from SharedPreferences
             val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
             val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: return@withContext null
+                ?: run {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Please login first",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@withContext null
+                }
 
             // Add the JWT token to the Authorization header
             connection.setRequestProperty("Authorization", "Bearer $jwtToken")
@@ -241,21 +251,41 @@ private suspend fun fetchCyclingSessions(
                     val responseText = connection.inputStream.bufferedReader().use { it.readText() }
                     parseCyclingSessions(responseText)
                 }
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Session expired. Please login again",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    null
+                }
                 HttpURLConnection.HTTP_INTERNAL_ERROR -> {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
-                            "No cycling sessions found...",
+                            "No cycling sessions found for $dateStr",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
                     null
                 }
                 else -> {
+                    // Try to get error message from response
+                    val errorMessage = try {
+                        val errorStream = connection.errorStream
+                        val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                        val jsonError = JSONObject(errorResponse ?: "")
+                        jsonError.optString("message", "Failed to fetch sessions: $responseCode")
+                    } catch (e: Exception) {
+                        "Failed to fetch sessions: $responseCode"
+                    }
+
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
-                            "Failed to fetch sessions: $responseCode",
+                            errorMessage,
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -263,6 +293,20 @@ private suspend fun fetchCyclingSessions(
                 }
             }
         } catch (e: Exception) {
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                else -> e.localizedMessage ?: "Unknown error occurred"
+            }
+
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    errorMessage,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             e.printStackTrace()
             null
         } finally {
@@ -271,23 +315,28 @@ private suspend fun fetchCyclingSessions(
     }
 }
 
-private fun parseCyclingSessions(response: String): List<Map<String, Any>> {
-    val cyclingSessions = mutableListOf<Map<String, Any>>()
-    val jsonArray = JSONArray(response)
+private fun parseCyclingSessions(response: String): List<Map<String, Any>>? {
+    return try {
+        val cyclingSessions = mutableListOf<Map<String, Any>>()
+        val jsonArray = JSONArray(response)
 
-    for (i in 0 until jsonArray.length()) {
-        val jsonObject = jsonArray.getJSONObject(i)
-        val session = mapOf(
-            "average_pulse" to jsonObject.getInt("average_pulse"),
-            "date" to jsonObject.getString("date"),
-            "duration" to jsonObject.getInt("duration"),
-            "training_id" to jsonObject.getJSONObject("training").getInt("training_id"),
-            "cycling_id" to jsonObject.getInt("cycling_id")
-        )
-        cyclingSessions.add(session)
+        for (i in 0 until jsonArray.length()) {
+            val jsonObject = jsonArray.getJSONObject(i)
+            val session = mapOf(
+                "average_pulse" to jsonObject.getInt("average_pulse"),
+                "date" to jsonObject.getString("date"),
+                "duration" to jsonObject.getInt("duration"),
+                "training_id" to jsonObject.getJSONObject("training").getInt("training_id"),
+                "cycling_id" to jsonObject.getInt("cycling_id")
+            )
+            cyclingSessions.add(session)
+        }
+
+        cyclingSessions
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
-
-    return cyclingSessions
 }
 
 @Composable

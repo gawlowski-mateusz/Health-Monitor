@@ -17,6 +17,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +48,11 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
 
+sealed class CyclingSessionResult {
+    data object Success : CyclingSessionResult()
+    data class Error(val message: String) : CyclingSessionResult()
+}
+
 @Composable
 fun NewCyclingSessionScreen (
     onSaveChoice: (LocalDate?) -> Unit,
@@ -56,9 +62,7 @@ fun NewCyclingSessionScreen (
     var averagePulse by remember { mutableIntStateOf(0) }
     val password by remember { mutableStateOf<String?>(null) }
     val selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
-
     val context = LocalContext.current
-    var loginResult by remember { mutableStateOf("") }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -90,7 +94,11 @@ fun NewCyclingSessionScreen (
                 },
                 label = { Text("Average pulse") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colorResource(id = R.color.light_blue),
+                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                )
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -103,7 +111,11 @@ fun NewCyclingSessionScreen (
                 },
                 label = { Text("Duration") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colorResource(id = R.color.light_blue),
+                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                )
             )
 
             // Save Button
@@ -112,11 +124,17 @@ fun NewCyclingSessionScreen (
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeAddNewCyclingSessionRequest(duration, averagePulse, password, context)
                         withContext(Dispatchers.Main) {
-                            loginResult = result
-                            if (result == "Success") {
-                                onSaveChoice(selectedDate)
-                            } else {
-                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                            when (result) {
+                                is CyclingSessionResult.Success -> {
+                                    onSaveChoice(selectedDate)
+                                }
+                                is CyclingSessionResult.Error -> {
+                                    Toast.makeText(
+                                        context,
+                                        result.message,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             }
                         }
                     }
@@ -171,8 +189,8 @@ private suspend fun makeAddNewCyclingSessionRequest(
     averagePulse: Int,
     password: String?,
     context: Context
-): String {
-    val url = URL("http://10.0.2.2:8000/cycling")
+): CyclingSessionResult {
+    val url = URL("${NetworkConfig.getBaseUrl()}/cycling")
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection
@@ -185,16 +203,14 @@ private suspend fun makeAddNewCyclingSessionRequest(
         // Retrieve the JWT token from SharedPreferences
         val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
         val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return "Token not found. Please log in."
+            ?: return CyclingSessionResult.Error("Please login to add cycling session")
 
         // Add the JWT token to the Authorization header
         connection.setRequestProperty("Authorization", "Bearer $jwtToken")
-
         connection.doOutput = true
 
-        // Create JSON object for the profile update data
+        // Create JSON object for the cycling session data
         val jsonBody = JSONObject().apply {
-            // Only put values in the JSON object if they are not null
             put("average_pulse", averagePulse)
             put("duration", duration)
             password?.let { put("password", it) }
@@ -209,16 +225,55 @@ private suspend fun makeAddNewCyclingSessionRequest(
             }
         }
 
-        val responseCode = connection.responseCode
-        if (responseCode == HttpURLConnection.HTTP_CREATED) {
-            connection.inputStream.bufferedReader().use { it.readText() }
-            return "Success"
-        } else {
-            "Failed with response code $responseCode"
+        when (val responseCode = connection.responseCode) {
+            HttpURLConnection.HTTP_CREATED -> {
+                CyclingSessionResult.Success
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                CyclingSessionResult.Error("Session expired. Please login again")
+            }
+            HttpURLConnection.HTTP_BAD_REQUEST -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Invalid cycling session data"
+                    } catch (e: Exception) {
+                        "Invalid cycling session data"
+                    }
+                } ?: "Invalid cycling session data"
+                CyclingSessionResult.Error(errorMessage)
+            }
+            HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                CyclingSessionResult.Error("Server error. Please try again later")
+            }
+            else -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Failed to add cycling session: $responseCode"
+                    } catch (e: Exception) {
+                        "Failed to add cycling session: $responseCode"
+                    }
+                } ?: "Failed to add cycling session: $responseCode"
+                CyclingSessionResult.Error(errorMessage)
+            }
         }
     } catch (e: Exception) {
         e.printStackTrace()
-        "Error: ${e.localizedMessage}"
+        val errorMessage = when (e) {
+            is java.net.ConnectException -> "Could not connect to server"
+            is java.net.SocketTimeoutException -> "Connection timed out"
+            is java.net.UnknownHostException -> "No internet connection"
+            is java.lang.NumberFormatException -> "Invalid number format for duration or pulse"
+            else -> "Error adding cycling session: ${e.localizedMessage}"
+        }
+        CyclingSessionResult.Error(errorMessage)
     } finally {
         connection.disconnect()
     }

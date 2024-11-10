@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
@@ -220,7 +221,7 @@ private suspend fun fetchRunningSessions(
 ): List<Map<String, Any>>? {
     return withContext(Dispatchers.IO) {
         val dateStr = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-        val url = URL("http://10.0.2.2:8000/running/$dateStr")
+        val url = URL("${NetworkConfig.getBaseUrl()}/running/$dateStr")
 
         val connection = url.openConnection() as HttpURLConnection
 
@@ -231,7 +232,16 @@ private suspend fun fetchRunningSessions(
             // Retrieve the JWT token from SharedPreferences
             val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
             val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: return@withContext null // Return null if token is not found
+                ?: run {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Please login to view running sessions",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@withContext null
+                }
 
             // Add the JWT token to the Authorization header
             connection.setRequestProperty("Authorization", "Bearer $jwtToken")
@@ -241,28 +251,55 @@ private suspend fun fetchRunningSessions(
                     val responseText = connection.inputStream.bufferedReader().use { it.readText() }
                     parseRunningSessions(responseText)
                 }
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Session expired. Please login again",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    null
+                }
                 HttpURLConnection.HTTP_INTERNAL_ERROR -> {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
-                            "No running sessions found...",
+                            "No running sessions found for $dateStr",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
                     null
                 }
                 else -> {
+                    // Try to get error message from response
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    val errorMessage = errorResponse?.let {
+                        try {
+                            val jsonError = JSONObject(it)
+                            jsonError.getString("message")
+                        } catch (e: Exception) {
+                            "Failed to fetch running sessions: $responseCode"
+                        }
+                    } ?: "Failed to fetch running sessions: $responseCode"
+
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "Failed to fetch sessions: $responseCode",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
                     }
                     null
                 }
             }
         } catch (e: Exception) {
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                else -> "Error fetching running sessions: ${e.localizedMessage}"
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            }
             e.printStackTrace()
             null
         } finally {
@@ -271,23 +308,34 @@ private suspend fun fetchRunningSessions(
     }
 }
 
-private fun parseRunningSessions(response: String): List<Map<String, Any>> {
-    val runningSessions = mutableListOf<Map<String, Any>>()
-    val jsonArray = JSONArray(response)
+private fun parseRunningSessions(response: String): List<Map<String, Any>>? {
+    return try {
+        val runningSessions = mutableListOf<Map<String, Any>>()
+        val jsonArray = JSONArray(response)
 
-    for (i in 0 until jsonArray.length()) {
-        val jsonObject = jsonArray.getJSONObject(i)
-        val session = mapOf(
-            "average_pulse" to jsonObject.getInt("average_pulse"),
-            "date" to jsonObject.getString("date"),
-            "duration" to jsonObject.getInt("duration"),
-            "training_id" to jsonObject.getJSONObject("training").getInt("training_id"),
-            "running_id" to jsonObject.getInt("running_id")
-        )
-        runningSessions.add(session)
+        for (i in 0 until jsonArray.length()) {
+            val jsonObject = jsonArray.getJSONObject(i)
+            try {
+                val session = mapOf(
+                    "average_pulse" to jsonObject.getInt("average_pulse"),
+                    "date" to jsonObject.getString("date"),
+                    "duration" to jsonObject.getInt("duration"),
+                    "training_id" to jsonObject.getJSONObject("training").getInt("training_id"),
+                    "running_id" to jsonObject.getInt("running_id")
+                )
+                runningSessions.add(session)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Continue with next session if one fails to parse
+                continue
+            }
+        }
+
+        runningSessions.takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
-
-    return runningSessions
 }
 
 @Composable

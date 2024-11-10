@@ -17,6 +17,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,14 +47,19 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 
+sealed class ProfileUpdateResult {
+    data object Success : ProfileUpdateResult()
+    data class Error(val message: String) : ProfileUpdateResult()
+}
+
 @Composable
 fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
-    var height by remember { mutableStateOf<Int?>(null) }
-    var weight by remember { mutableStateOf<Float?>(null) }
-    var password by remember { mutableStateOf<String?>(null) }
-
+    var heightText by remember { mutableStateOf("") }
+    var weightText by remember { mutableStateOf("") }
+    var passwordText by remember { mutableStateOf("") }
+    var heightError by remember { mutableStateOf<String?>(null) }
+    var weightError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    var loginResult by remember { mutableStateOf("") }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -77,54 +83,114 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
 
             // Height TextField
             OutlinedTextField(
-                value = height?.toString() ?: "",
+                value = heightText,
                 onValueChange = {
-                    height = it.toIntOrNull()
+                    heightText = it
+                    heightError = when {
+                        it.isNotEmpty() && it.toIntOrNull() == null -> "Please enter a valid number"
+                        it.isNotEmpty() && it.toIntOrNull() != null && it.toInt() <= 0 -> "Height must be greater than 0"
+                        else -> null
+                    }
                 },
                 label = { Text("Height (cm)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colorResource(id = R.color.light_blue),
+                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                    errorBorderColor = Color.Red,
+                    errorLabelColor = Color.Red
+                ),
+                isError = heightError != null,
+                supportingText = {
+                    heightError?.let {
+                        Text(
+                            text = it,
+                            color = Color.Red
+                        )
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // Weight TextField
             OutlinedTextField(
-                value = weight?.toString() ?: "",
+                value = weightText,
                 onValueChange = {
-                    weight = it.toFloatOrNull()
+                    weightText = it
+                    weightError = when {
+                        it.isNotEmpty() && it.toFloatOrNull() == null -> "Please enter a valid number"
+                        it.isNotEmpty() && it.toFloatOrNull() != null && it.toFloat() <= 0 -> "Weight must be greater than 0"
+                        else -> null
+                    }
                 },
                 label = { Text("Weight (kg)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colorResource(id = R.color.light_blue),
+                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                    errorBorderColor = Color.Red,
+                    errorLabelColor = Color.Red
+                ),
+                isError = weightError != null,
+                supportingText = {
+                    weightError?.let {
+                        Text(
+                            text = it,
+                            color = Color.Red
+                        )
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // Password TextField
             OutlinedTextField(
-                value = password ?: "",
-                onValueChange = {
-                    password = it.ifBlank { null }
-                },
+                value = passwordText,
+                onValueChange = { passwordText = it },
                 label = { Text("Password") },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colorResource(id = R.color.light_blue),
+                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                )
             )
 
             // Save Button
             Button(
                 onClick = {
-                    // Launch a coroutine to perform the network request
+                    val height = heightText.toIntOrNull()
+                    val weight = weightText.toFloatOrNull()
+                    val password = passwordText.takeIf { it.isNotBlank() }
+
+                    if (heightText.isNotEmpty() && height == null ||
+                        weightText.isNotEmpty() && weight == null ||
+                        heightError != null || weightError != null) {
+                        Toast.makeText(context, "Please correct the errors before saving", Toast.LENGTH_LONG).show()
+                        return@Button
+                    }
+
+                    if (heightText.isEmpty() && weightText.isEmpty() && passwordText.isEmpty()) {
+                        Toast.makeText(context, "No changes to update", Toast.LENGTH_LONG).show()
+                        return@Button
+                    }
+
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeEditProfileRequest(height, weight, password, context)
                         withContext(Dispatchers.Main) {
-                            loginResult = result
-                            if (result == "Success") {
-                                onSaveChoice()
-                            } else {
-                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                            when (result) {
+                                is ProfileUpdateResult.Success -> {
+                                    Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                                    onSaveChoice()
+                                }
+                                is ProfileUpdateResult.Error -> {
+                                    Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                     }
@@ -150,9 +216,7 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
 
             // Cancel Button
             OutlinedButton(
-                onClick = {
-                    onCancelChoice()
-                },
+                onClick = onCancelChoice,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp)
@@ -179,8 +243,8 @@ private suspend fun makeEditProfileRequest(
     weight: Float?,
     password: String?,
     context: Context
-): String {
-    val url = URL("http://10.0.2.2:8000/update-profile")
+): ProfileUpdateResult {
+    val url = URL("${NetworkConfig.getBaseUrl()}/update-profile")
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection
@@ -193,19 +257,29 @@ private suspend fun makeEditProfileRequest(
         // Retrieve the JWT token from SharedPreferences
         val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
         val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return "Token not found. Please log in."
+            ?: return ProfileUpdateResult.Error("Please login to update your profile")
 
         // Add the JWT token to the Authorization header
         connection.setRequestProperty("Authorization", "Bearer $jwtToken")
-
         connection.doOutput = true
 
         // Create JSON object for the profile update data
-        val jsonBody = JSONObject().apply {
-            // Only put values in the JSON object if they are not null
-            height?.let { put("height", it) }
-            weight?.let { put("weight", it) }
-            password?.let { put("password", it) }
+        val jsonBody = JSONObject()
+
+        // Only add non-null AND non-empty values
+        if (height != null && height > 0) {
+            jsonBody.put("height", height)
+        }
+        if (weight != null && weight > 0) {
+            jsonBody.put("weight", weight)
+        }
+        if (!password.isNullOrBlank()) {
+            jsonBody.put("password", password)
+        }
+
+        // Only proceed if there are actual changes to send
+        if (jsonBody.length() == 0) {
+            return ProfileUpdateResult.Error("No changes to update")
         }
 
         // Write the JSON data to the output stream
@@ -217,16 +291,51 @@ private suspend fun makeEditProfileRequest(
             }
         }
 
-        val responseCode = connection.responseCode
-        if (responseCode == HttpURLConnection.HTTP_OK) {
-            connection.inputStream.bufferedReader().use { it.readText() }
-            return "Success"
-        } else {
-            "Failed with response code $responseCode"
+        when (val responseCode = connection.responseCode) {
+            HttpURLConnection.HTTP_OK -> {
+                ProfileUpdateResult.Success
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                ProfileUpdateResult.Error("Session expired. Please login again")
+            }
+            HttpURLConnection.HTTP_BAD_REQUEST -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Invalid input data"
+                    } catch (e: Exception) {
+                        "Invalid input data"
+                    }
+                } ?: "Invalid input data"
+                ProfileUpdateResult.Error(errorMessage)
+            }
+            else -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Failed to update profile: $responseCode"
+                    } catch (e: Exception) {
+                        "Failed to update profile: $responseCode"
+                    }
+                } ?: "Failed to update profile: $responseCode"
+                ProfileUpdateResult.Error(errorMessage)
+            }
         }
     } catch (e: Exception) {
         e.printStackTrace()
-        "Error: ${e.localizedMessage}"
+        val errorMessage = when (e) {
+            is java.net.ConnectException -> "Could not connect to server"
+            is java.net.SocketTimeoutException -> "Connection timed out"
+            is java.net.UnknownHostException -> "No internet connection"
+            else -> "Error updating profile: ${e.localizedMessage}"
+        }
+        ProfileUpdateResult.Error(errorMessage)
     } finally {
         connection.disconnect()
     }

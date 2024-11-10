@@ -56,6 +56,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 
+sealed class LogoutResult {
+    data object Success : LogoutResult()
+    data class Error(val message: String) : LogoutResult()
+}
+
 @SuppressLint("NewApi")
 @Composable
 fun OverviewScreen(
@@ -71,7 +76,6 @@ fun OverviewScreen(
     var overviewData by remember { mutableStateOf<Map<String, Any>?>(null) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     val calendar = Calendar.getInstance()
-    var logoutResult by remember { mutableStateOf("") }
 
     // Fetch overview data when the screen is first composed
     LaunchedEffect(Unit) {
@@ -150,21 +154,32 @@ fun OverviewScreen(
                     )
                 }
 
-                IconButton(onClick = {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        val result = makeLogoutRequest(context)
-                        withContext(Dispatchers.Main) {
-                            logoutResult = result
-                            if (result == "User successfully logged out") {
-                                Toast.makeText(context, "Logout success!", Toast.LENGTH_SHORT)
-                                    .show()
-                                onLogOutChoice()
-                            } else {
-                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                IconButton(
+                    onClick = {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val result = makeLogoutRequest(context)
+                            withContext(Dispatchers.Main) {
+                                when (result) {
+                                    is LogoutResult.Success -> {
+                                        Toast.makeText(
+                                            context,
+                                            "Logout successful",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        onLogOutChoice()
+                                    }
+                                    is LogoutResult.Error -> {
+                                        Toast.makeText(
+                                            context,
+                                            result.message,
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
                             }
                         }
                     }
-                }) {
+                ) {
                     Icon(
                         imageVector = Icons.Default.ExitToApp,
                         contentDescription = "Logout"
@@ -183,7 +198,8 @@ fun OverviewScreen(
                 text = "$selectedDate",
                 fontSize = 14.sp,
                 color = Color.Gray,
-            )
+                fontWeight = FontWeight.Bold,
+                )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -298,7 +314,7 @@ private suspend fun fetchOverviewData(
     selectedDate: String? = null
 ): Map<String, Any?>? {
     return withContext(Dispatchers.IO) {
-        val url = URL("http://10.0.2.2:8000/activity-list")
+        val url = URL("${NetworkConfig.getBaseUrl()}/activity-list")
         val connection = url.openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
@@ -307,9 +323,14 @@ private suspend fun fetchOverviewData(
             // Retrieve JWT token from SharedPreferences
             val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
             val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: return@withContext null
-            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+                ?: run {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Please login to view overview", Toast.LENGTH_LONG).show()
+                    }
+                    return@withContext null
+                }
 
+            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
             connection.doOutput = true
 
             // Use the selected date or default to current date
@@ -323,17 +344,54 @@ private suspend fun fetchOverviewData(
             OutputStreamWriter(connection.outputStream).use { it.write(jsonPayload.toString()) }
 
             // Process response
-            val responseCode = connection.responseCode
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-                parseOverviewData(responseText)
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Failed to fetch overview data", Toast.LENGTH_SHORT)
-                        .show()
+            when (val responseCode = connection.responseCode) {
+                HttpURLConnection.HTTP_OK -> {
+                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                    parseOverviewData(responseText)
                 }
-                null
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Session expired. Please login again", Toast.LENGTH_LONG).show()
+                    }
+                    null
+                }
+                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No data found for selected date", Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
+                else -> {
+                    // Try to get error message from response
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    val errorMessage = errorResponse?.let {
+                        try {
+                            val jsonError = JSONObject(it)
+                            jsonError.getString("message")
+                        } catch (e: Exception) {
+                            "Failed to fetch overview data: $responseCode"
+                        }
+                    } ?: "Failed to fetch overview data: $responseCode"
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
             }
+        } catch (e: Exception) {
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                else -> "Error fetching overview data: ${e.localizedMessage}"
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            }
+            e.printStackTrace()
+            null
         } finally {
             connection.disconnect()
         }
@@ -379,9 +437,8 @@ private fun parseOverviewData(response: String): Map<String, Any?>? {
     }
 }
 
-private suspend fun makeLogoutRequest(context: Context): String {
-    val url = URL("http://10.0.2.2:8000/logout")
-
+private suspend fun makeLogoutRequest(context: Context): LogoutResult {
+    val url = URL("${NetworkConfig.getBaseUrl()}/logout")
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection
     }
@@ -390,28 +447,56 @@ private suspend fun makeLogoutRequest(context: Context): String {
         connection.requestMethod = "POST"
         connection.setRequestProperty("Content-Type", "application/json")
 
-        // Retrieve the JWT token from SharedPreferences
+        // Get the token
         val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
         val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return "Token not found. Please log in."
+            ?: return LogoutResult.Success.also {
+                clearUserData(context)
+            }
 
-        // Add the JWT token to the Authorization header
-        connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+        // Add the JWT token to the Authorization header WITH "Bearer " prefix
+        connection.setRequestProperty("Authorization", "Bearer $jwtToken") // Make sure there's a space after "Bearer"
 
-        connection.doOutput = true
-
-        val responseCode = connection.responseCode
-        if (responseCode == HttpURLConnection.HTTP_OK) {
-            connection.inputStream.bufferedReader().use { it.readText() }
-            "User successfully logged out"
-        } else {
-            "Failed to log out with response code $responseCode"
+        when (connection.responseCode) {
+            HttpURLConnection.HTTP_OK -> {
+                clearUserData(context)
+                LogoutResult.Success
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                clearUserData(context)
+                // Maybe add debug logging here
+                println("Unauthorized error. Token: $jwtToken")
+                LogoutResult.Success
+            }
+            else -> {
+                clearUserData(context)
+                LogoutResult.Success
+            }
         }
     } catch (e: Exception) {
         e.printStackTrace()
-        "Error: ${e.localizedMessage}"
+        clearUserData(context)
+        LogoutResult.Success
     } finally {
         connection.disconnect()
+    }
+}
+
+private fun isTokenValid(token: String): Boolean {
+    return try {
+        val parts = token.split(".")
+        parts.size == 3
+    } catch (e: Exception) {
+        false
+    }
+}
+
+private suspend fun clearUserData(context: Context) {
+    withContext(Dispatchers.IO) {
+        context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
     }
 }
 

@@ -17,6 +17,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,10 +46,14 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 
+sealed class StepsUpdateResult {
+    data object Success : StepsUpdateResult()
+    data class Error(val message: String) : StepsUpdateResult()
+}
+
 @Composable
 fun EditStepsScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
     var goal by remember { mutableStateOf<Int?>(null) }
-
     val context = LocalContext.current
     var loginResult by remember { mutableStateOf("") }
 
@@ -82,7 +87,11 @@ fun EditStepsScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
                 },
                 label = { Text("Goal (e.g. 10000)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colorResource(id = R.color.light_blue),
+                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                )
             )
 
             // Save Button
@@ -91,11 +100,17 @@ fun EditStepsScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeEditStepsRequest(goal, context)
                         withContext(Dispatchers.Main) {
-                            loginResult = result
-                            if (result == "Success") {
-                                onSaveChoice()
-                            } else {
-                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                            when (result) {
+                                is StepsUpdateResult.Success -> {
+                                    onSaveChoice()
+                                }
+                                is StepsUpdateResult.Error -> {
+                                    Toast.makeText(
+                                        context,
+                                        result.message,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             }
                         }
                     }
@@ -148,8 +163,8 @@ fun EditStepsScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
 private suspend fun makeEditStepsRequest(
     goal: Int?,
     context: Context
-): String {
-    val url = URL("http://10.0.2.2:8000/steps/goal")
+): StepsUpdateResult {
+    val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection
@@ -162,16 +177,14 @@ private suspend fun makeEditStepsRequest(
         // Retrieve the JWT token from SharedPreferences
         val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
         val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return "Token not found. Please log in."
+            ?: return StepsUpdateResult.Error("Please login to update steps goal")
 
         // Add the JWT token to the Authorization header
         connection.setRequestProperty("Authorization", "Bearer $jwtToken")
-
         connection.doOutput = true
 
         // Create JSON object for the steps update data
         val jsonBody = JSONObject().apply {
-            // Only put values in the JSON object if they are not null
             goal?.let { put("goal", it) }
         }
 
@@ -184,16 +197,51 @@ private suspend fun makeEditStepsRequest(
             }
         }
 
-        val responseCode = connection.responseCode
-        if (responseCode == HttpURLConnection.HTTP_CREATED) {
-            connection.inputStream.bufferedReader().use { it.readText() }
-            return "Success"
-        } else {
-            "Failed with response code $responseCode"
+        when (val responseCode = connection.responseCode) {
+            HttpURLConnection.HTTP_CREATED -> {
+                StepsUpdateResult.Success
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                StepsUpdateResult.Error("Session expired. Please login again")
+            }
+            HttpURLConnection.HTTP_BAD_REQUEST -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Invalid steps goal"
+                    } catch (e: Exception) {
+                        "Invalid steps goal"
+                    }
+                } ?: "Invalid steps goal"
+                StepsUpdateResult.Error(errorMessage)
+            }
+            else -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Failed to update steps goal: $responseCode"
+                    } catch (e: Exception) {
+                        "Failed to update steps goal: $responseCode"
+                    }
+                } ?: "Failed to update steps goal: $responseCode"
+                StepsUpdateResult.Error(errorMessage)
+            }
         }
     } catch (e: Exception) {
         e.printStackTrace()
-        "Error: ${e.localizedMessage}"
+        val errorMessage = when (e) {
+            is java.net.ConnectException -> "Could not connect to server"
+            is java.net.SocketTimeoutException -> "Connection timed out"
+            is java.net.UnknownHostException -> "No internet connection"
+            else -> "Error updating steps goal: ${e.localizedMessage}"
+        }
+        StepsUpdateResult.Error(errorMessage)
     } finally {
         connection.disconnect()
     }

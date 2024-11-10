@@ -235,7 +235,7 @@ fun ProfileViewScreen(
 }
 
 fun getUserIdFromJwt(jwt: String): String? {
-    try {
+    return try {
         // Split the JWT into its parts
         val parts = jwt.split(".")
         if (parts.size != 3) return null
@@ -248,9 +248,10 @@ fun getUserIdFromJwt(jwt: String): String? {
         // Parse the JSON payload
         val jsonObject = JSONObject(decodedString)
         return jsonObject.optString("sub").takeIf { it.isNotEmpty() }
+            ?: throw Exception("JWT does not contain user ID")
     } catch (e: Exception) {
         e.printStackTrace()
-        return null
+        null
     }
 }
 
@@ -259,34 +260,88 @@ private suspend fun fetchUserData(context: Context): Map<String, Any?>? {
         // Retrieve JWT token from SharedPreferences
         val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
         val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return@withContext null
+            ?: run {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Please login to view profile", Toast.LENGTH_LONG).show()
+                }
+                return@withContext null
+            }
 
         // Get user_id from JWT token
         val userId = getUserIdFromJwt(jwtToken)
-            ?: return@withContext null
+            ?: run {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Invalid session. Please login again", Toast.LENGTH_LONG).show()
+                }
+                return@withContext null
+            }
 
-        val url = URL("http://10.0.2.2:8000/user/$userId")
+        val url = URL("${NetworkConfig.getBaseUrl()}/user/$userId")
         val connection = url.openConnection() as HttpURLConnection
 
         try {
             connection.requestMethod = "GET"
+            connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer $jwtToken")
 
-            val responseCode = connection.responseCode
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-                parseUserData(responseText)
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Failed to fetch user data", Toast.LENGTH_SHORT)
-                        .show()
+            when (val responseCode = connection.responseCode) {
+                HttpURLConnection.HTTP_OK -> {
+                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                    parseUserData(responseText)?.also {
+                        // Cache the user data in SharedPreferences if needed
+                        cacheUserData(context, it)
+                    }
                 }
-                null
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Session expired. Please login again",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    null
+                }
+                HttpURLConnection.HTTP_NOT_FOUND -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "User profile not found",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    null
+                }
+                else -> {
+                    // Try to get error message from response
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    val errorMessage = errorResponse?.let {
+                        try {
+                            val jsonError = JSONObject(it)
+                            jsonError.getString("message")
+                        } catch (e: Exception) {
+                            "Failed to fetch user data: $responseCode"
+                        }
+                    } ?: "Failed to fetch user data: $responseCode"
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
             }
         } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                else -> "Error fetching user data: ${e.localizedMessage}"
             }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            }
+            e.printStackTrace()
             null
         } finally {
             connection.disconnect()
@@ -300,14 +355,28 @@ private fun parseUserData(response: String): Map<String, Any?>? {
         mapOf(
             "birth_date" to jsonResponse.getString("birth_date"),
             "email" to jsonResponse.getString("email"),
-            "height" to jsonResponse.opt("height") as? Int,
+            "height" to jsonResponse.optInt("height").takeIf { it != 0 },
             "name" to jsonResponse.getString("name"),
             "sex" to jsonResponse.getString("sex"),
-            "weight" to jsonResponse.opt("weight") as? Double
+            "weight" to jsonResponse.optDouble("weight").takeIf { it != 0.0 }
         )
     } catch (e: Exception) {
         e.printStackTrace()
         null
+    }
+}
+
+// Optional: Cache user data in SharedPreferences
+private fun cacheUserData(context: Context, userData: Map<String, Any?>) {
+    context.getSharedPreferences("user_data", Context.MODE_PRIVATE).edit().apply {
+        userData.forEach { (key, value) ->
+            when (value) {
+                is String -> putString(key, value)
+                is Int -> putInt(key, value)
+                is Double -> putFloat(key, value.toFloat())
+            }
+        }
+        apply()
     }
 }
 

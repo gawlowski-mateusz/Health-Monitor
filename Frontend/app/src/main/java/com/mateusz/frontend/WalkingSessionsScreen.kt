@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
@@ -223,7 +224,7 @@ private suspend fun fetchWalkingSessions(
 ): List<Map<String, Any>>? {
     return withContext(Dispatchers.IO) {
         val dateStr = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-        val url = URL("http://10.0.2.2:8000/walking/$dateStr")
+        val url = URL("${NetworkConfig.getBaseUrl()}/walking/$dateStr")
 
         val connection = url.openConnection() as HttpURLConnection
 
@@ -234,7 +235,16 @@ private suspend fun fetchWalkingSessions(
             // Retrieve the JWT token from SharedPreferences
             val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
             val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: return@withContext null
+                ?: run {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Please login to view walking sessions",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@withContext null
+                }
 
             // Add the JWT token to the Authorization header
             connection.setRequestProperty("Authorization", "Bearer $jwtToken")
@@ -244,30 +254,55 @@ private suspend fun fetchWalkingSessions(
                     val responseText = connection.inputStream.bufferedReader().use { it.readText() }
                     parseWalkingSessions(responseText)
                 }
-
-                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
-                            "No walking sessions found...",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    null
-                }
-
-                else -> {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "Failed to fetch sessions: $responseCode",
+                            "Session expired. Please login again",
                             Toast.LENGTH_LONG
                         ).show()
                     }
                     null
                 }
+                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "No walking sessions found for $dateStr",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    null
+                }
+                else -> {
+                    // Try to get error message from response
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    val errorMessage = errorResponse?.let {
+                        try {
+                            val jsonError = JSONObject(it)
+                            jsonError.getString("message")
+                        } catch (e: Exception) {
+                            "Failed to fetch walking sessions: $responseCode"
+                        }
+                    } ?: "Failed to fetch walking sessions: $responseCode"
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
             }
         } catch (e: Exception) {
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                else -> "Error fetching walking sessions: ${e.localizedMessage}"
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            }
             e.printStackTrace()
             null
         } finally {
@@ -276,23 +311,34 @@ private suspend fun fetchWalkingSessions(
     }
 }
 
-private fun parseWalkingSessions(response: String): List<Map<String, Any>> {
-    val walkingSessions = mutableListOf<Map<String, Any>>()
-    val jsonArray = JSONArray(response)
+private fun parseWalkingSessions(response: String): List<Map<String, Any>>? {
+    return try {
+        val walkingSessions = mutableListOf<Map<String, Any>>()
+        val jsonArray = JSONArray(response)
 
-    for (i in 0 until jsonArray.length()) {
-        val jsonObject = jsonArray.getJSONObject(i)
-        val session = mapOf(
-            "average_pulse" to jsonObject.getInt("average_pulse"),
-            "date" to jsonObject.getString("date"),
-            "duration" to jsonObject.getInt("duration"),
-            "training_id" to jsonObject.getJSONObject("training").getInt("training_id"),
-            "walking_id" to jsonObject.getInt("walking_id")
-        )
-        walkingSessions.add(session)
+        for (i in 0 until jsonArray.length()) {
+            val jsonObject = jsonArray.getJSONObject(i)
+            try {
+                val session = mapOf(
+                    "average_pulse" to jsonObject.getInt("average_pulse"),
+                    "date" to jsonObject.getString("date"),
+                    "duration" to jsonObject.getInt("duration"),
+                    "training_id" to jsonObject.getJSONObject("training").getInt("training_id"),
+                    "walking_id" to jsonObject.getInt("walking_id")
+                )
+                walkingSessions.add(session)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Continue with next session if one fails to parse
+                continue
+            }
+        }
+
+        walkingSessions.takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
-
-    return walkingSessions
 }
 
 @Composable

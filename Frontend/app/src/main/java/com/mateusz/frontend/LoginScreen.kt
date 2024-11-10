@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,6 +33,7 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +53,6 @@ fun LoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-
     val context = LocalContext.current
     var loginResult by remember { mutableStateOf("") }
 
@@ -63,7 +64,7 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
-            painter = painterResource(id = R.drawable.logo_simple),
+            painter = painterResource(id = R.drawable.health_monitor_logo_simple),
             contentDescription = "App Logo",
             modifier = Modifier
                 .size(200.dp),
@@ -76,7 +77,11 @@ fun LoginScreen(
             label = { Text("Email") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 32.dp)
+                .padding(top = 32.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colorResource(id = R.color.light_blue),
+                focusedLabelColor = colorResource(id = R.color.light_blue),
+            )
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -85,11 +90,15 @@ fun LoginScreen(
             value = password,
             onValueChange = { password = it },
             label = { Text("Password") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp)
-
+                .padding(bottom = 8.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colorResource(id = R.color.light_blue),
+                focusedLabelColor = colorResource(id = R.color.light_blue),
+            )
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -128,9 +137,7 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
-            onClick = {
-                onNavigateToHomeScreen()
-            },
+            onClick = { onNavigateToHomeScreen() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp)
@@ -156,7 +163,16 @@ private suspend fun makeLoginRequest(
     password: String,
     context: Context
 ): String {
-    val url = URL("http://10.0.2.2:8000/login")
+    // Clear any existing tokens before attempting login
+    withContext(Dispatchers.IO) {
+        context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
+    }
+
+    val url = URL("${NetworkConfig.getBaseUrl()}/login")
+//    println("Making login request to: $url") // Debug log
 
     val connection = withContext(Dispatchers.IO) {
         url.openConnection() as HttpURLConnection
@@ -173,6 +189,8 @@ private suspend fun makeLoginRequest(
             put("password", password)
         }
 
+        println("Sending login data: ${jsonBody.toString()}") // Debug log
+
         // Write the JSON data to the output stream
         withContext(Dispatchers.IO) {
             OutputStreamWriter(connection.outputStream).apply {
@@ -183,22 +201,47 @@ private suspend fun makeLoginRequest(
         }
 
         val responseCode = connection.responseCode
+        println("Response code: $responseCode") // Debug log
+
         if (responseCode == HttpURLConnection.HTTP_OK) {
             val response = connection.inputStream.bufferedReader().use { it.readText() }
-            val jsonResponse = JSONObject(response)
+            println("Success response: $response") // Debug log
 
+            val jsonResponse = JSONObject(response)
             val accessToken = jsonResponse.getString("access_token")
 
-            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            sharedPreferences.edit().putString("access_token", accessToken).apply()
+            // Save the new token
+            withContext(Dispatchers.IO) {
+                context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("access_token", accessToken)
+                    .apply()
+            }
 
-            return "Success"
+            "Success"
         } else {
-            "Failed with response code $responseCode"
+            // Try to get error message from response
+            val errorStream = connection.errorStream
+            val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+            println("Error response: $errorResponse") // Debug log
+
+            errorResponse?.let {
+                try {
+                    val jsonError = JSONObject(it)
+                    jsonError.getString("message") ?: "Failed with response code $responseCode"
+                } catch (e: Exception) {
+                    "Failed with response code $responseCode"
+                }
+            } ?: "Failed with response code $responseCode"
         }
     } catch (e: Exception) {
         e.printStackTrace()
-        "Error: ${e.localizedMessage}"
+        when (e) {
+            is java.net.ConnectException -> "Error: Could not connect to server"
+            is java.net.SocketTimeoutException -> "Error: Connection timed out"
+            is java.net.UnknownHostException -> "Error: No internet connection"
+            else -> "Error: ${e.localizedMessage}"
+        }
     } finally {
         connection.disconnect()
     }

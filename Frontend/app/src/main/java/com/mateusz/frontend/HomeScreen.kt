@@ -37,7 +37,7 @@ fun HomeScreen(onLoginPanelChoice: () -> Unit, onSignupPanelChoice: () -> Unit) 
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
-            painter = painterResource(id = R.drawable.logo_full),
+            painter = painterResource(id = R.drawable.health_monitor_logo_full),
             contentDescription = "App Logo",
             modifier = Modifier
                 .size(300.dp)
