@@ -1,10 +1,15 @@
 package com.mateusz.frontend
 
 import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.util.Log
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -21,16 +28,21 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +52,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -54,7 +69,7 @@ sealed class WalkingSessionResult {
 }
 
 @Composable
-fun NewWalkingSessionScreen (
+fun NewWalkingSessionScreen(
     onSaveChoice: (LocalDate?) -> Unit,
     onCancelChoice: (LocalDate?) -> Unit
 ) {
@@ -63,6 +78,59 @@ fun NewWalkingSessionScreen (
     val password by remember { mutableStateOf<String?>(null) }
     val selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     val context = LocalContext.current
+
+    val heartRateReadings = remember { mutableStateListOf<Int>() }
+    var lastHeartRateUpdate by remember { mutableLongStateOf(0L) }
+    var isReceivingData by remember { mutableStateOf(false) }
+
+    // Add a coroutine scope for the polling
+    val scope = rememberCoroutineScope()
+    var pollingJob by remember { mutableStateOf<Job?>(null) }
+    var isPolling by remember { mutableStateOf(false) }
+
+    // State for Gadgetbridge availability
+    val isGadgetBridgeInstalled = remember {
+        GadgetBridgeHelper.isGadgetBridgeInstalled(context)
+    }
+
+    // Function to start polling
+    fun startPolling() {
+        Log.d("HeartRatePolling", "Starting polling...")
+        pollingJob?.cancel()
+        isPolling = true
+        pollingJob = scope.launch {
+            Log.d("HeartRatePolling", "Inside launch block")
+            try {
+                while (isActive) {
+                    Log.d("HeartRatePolling", "Polling iteration started")
+                    try {
+                        val heartRate = GadgetbridgeDatabase.getLatestHeartRate(context)
+                        Log.d("HeartRatePolling", "Got heart rate: $heartRate")
+                        if (heartRate > 0) {
+                            heartRateReadings.add(heartRate)
+                            lastHeartRateUpdate = System.currentTimeMillis()
+                            isReceivingData = true
+                            averagePulse = heartRateReadings.average().toInt()
+                            Log.d("HeartRatePolling", "Updated average pulse to: $averagePulse")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("HeartRatePolling", "Error in polling: ${e.message}", e)
+                    }
+                    delay(1000)
+                }
+            } finally {
+                Log.d("HeartRatePolling", "Polling loop ended")
+                isPolling = false
+            }
+        }
+    }
+
+    // Clean up when leaving the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            pollingJob?.cancel()
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -86,20 +154,96 @@ fun NewWalkingSessionScreen (
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Average pulse TextField
-            OutlinedTextField(
-                value = averagePulse.toString(),
-                onValueChange = {
-                    averagePulse = it.toInt()
-                },
-                label = { Text("Average pulse") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            // Average pulse TextField with Gadgetbridge button
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorResource(id = R.color.light_blue),
-                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = averagePulse.toString(),
+                    onValueChange = { }, // Empty because we don't want manual changes
+                    label = { Text("Average pulse") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colorResource(id = R.color.light_blue),
+                        focusedLabelColor = colorResource(id = R.color.light_blue),
+                        disabledTextColor = Color.Black,
+                        disabledBorderColor = colorResource(id = R.color.light_blue),
+                        disabledLabelColor = colorResource(id = R.color.light_blue),
+                    ),
+                    enabled = false,
+                    trailingIcon = if (heartRateReadings.isNotEmpty()) {
+                        { Text("(${heartRateReadings.size} readings)") }
+                    } else null
                 )
-            )
+
+                IconButton(
+                    onClick = {
+                        if (isGadgetBridgeInstalled) {
+                            Log.d("HeartRatePolling", "IconButton clicked, isPolling: $isPolling")
+                            if (isPolling) {
+                                Log.d("HeartRatePolling", "Stopping polling")
+                                pollingJob?.cancel()
+                                isPolling = false
+                            } else {
+                                Log.d("HeartRatePolling", "Starting polling")
+                                startPolling()
+                            }
+                            // Open Gadgetbridge
+                            val intent = context.packageManager.getLaunchIntentForPackage(GadgetBridgeHelper.GADGETBRIDGE_PACKAGE)
+                            if (intent != null) {
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            }
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Please install Gadgetbridge from F-Droid to connect with PineTime",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            id = if (isPolling && isReceivingData) R.drawable.ic_watch_receiving
+                            else if (isGadgetBridgeInstalled) R.drawable.ic_watch_connected
+                            else R.drawable.ic_watch_disconnected
+                        ),
+                        contentDescription = if (isPolling) "Stop monitoring"
+                        else if (isGadgetBridgeInstalled) "Start monitoring"
+                        else "Install Gadgetbridge",
+                        tint = if (isPolling && isReceivingData) Color.Green
+                        else if (isGadgetBridgeInstalled) colorResource(id = R.color.light_blue)
+                        else Color.Gray
+                    )
+                }
+            }
+
+            if (!isGadgetBridgeInstalled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Install Gadgetbridge to connect with PineTime",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
+            if (isGadgetBridgeInstalled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Debug: ${heartRateReadings.size} readings, Last update: ${
+                        if (lastHeartRateUpdate > 0)
+                            "${(System.currentTimeMillis() - lastHeartRateUpdate) / 1000}s ago"
+                        else "never"
+                    }",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -107,7 +251,11 @@ fun NewWalkingSessionScreen (
             OutlinedTextField(
                 value = duration.toString(),
                 onValueChange = {
-                    duration = it.toInt()
+                    try {
+                        duration = it.toIntOrNull() ?: 0
+                    } catch (e: NumberFormatException) {
+                        // Handle invalid input
+                    }
                 },
                 label = { Text("Duration") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -121,6 +269,7 @@ fun NewWalkingSessionScreen (
             // Save Button
             Button(
                 onClick = {
+                    pollingJob?.cancel() // Stop polling when saving
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeAddNewWalkingSessionRequest(duration, averagePulse, password, context)
                         withContext(Dispatchers.Main) {
@@ -161,6 +310,7 @@ fun NewWalkingSessionScreen (
             // Cancel Button
             OutlinedButton(
                 onClick = {
+                    pollingJob?.cancel() // Stop polling when canceling
                     onCancelChoice(selectedDate)
                 },
                 modifier = Modifier
@@ -279,6 +429,7 @@ private suspend fun makeAddNewWalkingSessionRequest(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Preview(showBackground = true)
 @Composable
 fun PreviewNewWalkingSessionScreen() {

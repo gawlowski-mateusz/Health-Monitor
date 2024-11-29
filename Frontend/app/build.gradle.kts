@@ -10,7 +10,14 @@ android {
     defaultConfig {
         applicationId = "com.mateusz.frontend"
         minSdk = 26
-        targetSdk = 34
+
+        // Update this part
+        targetSdk = if (System.getenv("ANDROID_SDK_ROOT") != null) {
+            33  // or whatever your target SDK is
+        } else {
+            30  // This will help with package visibility
+        }
+
         versionCode = 1
         versionName = "1.0"
 
