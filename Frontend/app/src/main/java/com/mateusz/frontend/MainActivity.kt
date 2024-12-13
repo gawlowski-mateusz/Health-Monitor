@@ -1,9 +1,11 @@
 package com.mateusz.frontend
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,18 +19,19 @@ import androidx.navigation.compose.rememberNavController
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+
 class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.all { it.value }) {
             // All permissions granted
-            Toast.makeText(this, "Bluetooth permissions granted", Toast.LENGTH_SHORT).show()
+            Log.d("Permissions", "All required permissions granted")
         } else {
             // Some permissions denied
             Toast.makeText(
                 this,
-                "Bluetooth permissions required for heart rate monitoring",
+                "Bluetooth permissions are required for heart rate monitoring",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -37,10 +40,47 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        checkAndRequestPermissions()
         checkBlePermissions()
+        startBackgroundService()
         setContent {
             MyApp()
         }
+    }
+
+    private fun checkAndRequestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12 and above
+            val permissions = arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT
+            )
+            requestPermissions(permissions)
+        } else {
+            // Android 11 and below
+            val permissions = arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN
+            )
+            requestPermissions(permissions)
+        }
+    }
+
+    private fun requestPermissions(permissions: Array<String>) {
+        val notGrantedPermissions = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (notGrantedPermissions.isNotEmpty()) {
+            requestPermissionLauncher.launch(notGrantedPermissions.toTypedArray())
+        }
+    }
+
+    private fun startBackgroundService() {
+        val serviceIntent = Intent(this, BackgroundService::class.java)
+        startForegroundService(serviceIntent)
     }
 
     private fun checkBlePermissions() {

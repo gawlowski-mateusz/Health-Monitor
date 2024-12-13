@@ -2,7 +2,6 @@ package com.mateusz.frontend
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
@@ -10,198 +9,135 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
+import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
-import okhttp3.internal.and
 import java.util.UUID
 
-class HeartRateManager(private val context: Context) {
-    private val HEART_RATE_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
-    private val HEART_RATE_MEASUREMENT_CHAR_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
+object HeartRateManager {
+    private const val TAG = "HeartRateManager"
+    private const val HEART_RATE_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
+    private const val HEART_RATE_MEASUREMENT_CHAR_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
 
-    private var bluetoothAdapter: BluetoothAdapter? = null
     private var bluetoothGatt: BluetoothGatt? = null
-    private var isScanning = false
-    private val handler = Handler(Looper.getMainLooper())
 
-    private var onHeartRateUpdate: ((Int) -> Unit)? = null
+    @RequiresApi(Build.VERSION_CODES.S)
+    @SuppressLint("MissingPermission")
+    fun startHeartRateMonitoring(context: Context, onHeartRateReceived: (Int) -> Unit) {
+        if (!checkPermissions(context)) {
+            Log.e(TAG, "Missing required permissions")
+            return
+        }
 
-    init {
         val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        bluetoothAdapter = bluetoothManager.adapter
-    }
+        val bluetoothAdapter = bluetoothManager.adapter
 
-    fun startHeartRateMonitoring(onHeartRate: (Int) -> Unit) {
-        onHeartRateUpdate = onHeartRate
-        startScan()
-    }
+        val scanner = bluetoothAdapter.bluetoothLeScanner
 
-    @SuppressLint("MissingPermission")
-    private fun startScan() {
-        if (isScanning) return
-
-        if (!hasRequiredPermissions()) {
-            return
-        }
-
-        isScanning = true
-        try {
-            bluetoothAdapter?.bluetoothLeScanner?.let { scanner ->
-                val settings = ScanSettings.Builder()
-                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                    .build()
-
-                val filter = ScanFilter.Builder()
-                    .setDeviceName("InfiniTime")
-                    .build()
-
-                handler.postDelayed({ stopScan() }, 10000) // Stop scanning after 10 seconds
-
-                scanner.startScan(listOf(filter), settings, scanCallback)
+        val scanCallback = object : ScanCallback() {
+            @RequiresApi(Build.VERSION_CODES.S)
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                if (result.device?.name?.contains("InfiniTime", ignoreCase = true) == true) {
+                    Log.d(TAG, "Found PineTime device: ${result.device.name}")
+                    connectToDevice(context, result.device, onHeartRateReceived)
+                }
             }
-        } catch (e: SecurityException) {
-            isScanning = false
-            // Handle security exception
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun stopScan() {
-        if (!isScanning) return
-
-        if (!hasRequiredPermissions()) {
-            return
         }
 
-        isScanning = false
+        val scanSettings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+
         try {
-            bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback)
+            scanner.startScan(null, scanSettings, scanCallback)
         } catch (e: SecurityException) {
-            // Handle security exception
+            Log.e(TAG, "Security exception while scanning: ${e.message}")
         }
     }
 
-    private fun hasRequiredPermissions(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.BLUETOOTH_SCAN
-            ) == PackageManager.PERMISSION_GRANTED &&
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED &&
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    ) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private val scanCallback = object : ScanCallback() {
-        override fun onScanResult(callbackType: Int, result: ScanResult) {
-            stopScan()
-            connectToDevice(result.device)
-        }
-    }
-
+    @RequiresApi(Build.VERSION_CODES.S)
     @SuppressLint("MissingPermission")
-    private fun connectToDevice(device: BluetoothDevice) {
-        if (!hasRequiredPermissions()) {
-            return
+    private fun connectToDevice(context: Context, device: BluetoothDevice, onHeartRateReceived: (Int) -> Unit) {
+        if (!checkPermissions(context)) return
+
+        val gattCallback = object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    Log.d(TAG, "Connected to GATT server")
+                    try {
+                        gatt.discoverServices()
+                    } catch (e: SecurityException) {
+                        Log.e(TAG, "Security exception discovering services: ${e.message}")
+                    }
+                }
+            }
+
+            override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    val service = gatt.getService(UUID.fromString(HEART_RATE_SERVICE_UUID))
+                    val characteristic = service?.getCharacteristic(UUID.fromString(HEART_RATE_MEASUREMENT_CHAR_UUID))
+
+                    if (characteristic != null) {
+                        try {
+                            gatt.setCharacteristicNotification(characteristic, true)
+                        } catch (e: SecurityException) {
+                            Log.e(TAG, "Security exception setting notification: ${e.message}")
+                        }
+                    }
+                }
+            }
+
+            override fun onCharacteristicChanged(
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+                value: ByteArray
+            ) {
+                if (characteristic.uuid == UUID.fromString(HEART_RATE_MEASUREMENT_CHAR_UUID)) {
+                    val flag = value[0].toInt()
+                    val heartRate = if (flag and 0x1 != 0) {
+                        (value[1].toInt() and 0xFF) + (value[2].toInt() shl 8)
+                    } else {
+                        value[1].toInt() and 0xFF
+                    }
+                    Log.d(TAG, "Heart rate received: $heartRate")
+                    onHeartRateReceived(heartRate)
+                }
+            }
         }
 
         try {
             bluetoothGatt = device.connectGatt(context, false, gattCallback)
         } catch (e: SecurityException) {
-            // Handle security exception
-        }
-    }
-
-    private val gattCallback = object : BluetoothGattCallback() {
-        @SuppressLint("MissingPermission")
-        override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            if (!hasRequiredPermissions()) {
-                return
-            }
-
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                try {
-                    gatt.discoverServices()
-                } catch (e: SecurityException) {
-                    // Handle security exception
-                }
-            }
-        }
-
-        @SuppressLint("MissingPermission")
-        override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (!hasRequiredPermissions()) {
-                return
-            }
-
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                try {
-                    val heartRateService = gatt.getService(UUID.fromString(HEART_RATE_SERVICE_UUID))
-                    val heartRateChar = heartRateService?.getCharacteristic(
-                        UUID.fromString(HEART_RATE_MEASUREMENT_CHAR_UUID)
-                    )
-
-                    if (heartRateChar != null) {
-                        gatt.setCharacteristicNotification(heartRateChar, true)
-                    }
-                } catch (e: SecurityException) {
-                    // Handle security exception
-                }
-            }
-        }
-
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-            value: ByteArray
-        ) {
-            if (characteristic.uuid == UUID.fromString(HEART_RATE_MEASUREMENT_CHAR_UUID)) {
-                val flag = value[0]
-                val format = if (flag and 0x01 != 0) BluetoothGattCharacteristic.FORMAT_UINT16
-                else BluetoothGattCharacteristic.FORMAT_UINT8
-                val heartRate = when (format) {
-                    BluetoothGattCharacteristic.FORMAT_UINT8 -> value[1].toInt()
-                    BluetoothGattCharacteristic.FORMAT_UINT16 -> (value[2].toInt() shl 8) + value[1]
-                    else -> 0
-                }
-
-                handler.post {
-                    onHeartRateUpdate?.invoke(heartRate)
-                }
-            }
+            Log.e(TAG, "Security exception connecting to device: ${e.message}")
         }
     }
 
     @SuppressLint("MissingPermission")
     fun stopHeartRateMonitoring() {
-        if (!hasRequiredPermissions()) {
-            return
-        }
-
         try {
             bluetoothGatt?.close()
             bluetoothGatt = null
-            onHeartRateUpdate = null
         } catch (e: SecurityException) {
-            // Handle security exception
+            Log.e(TAG, "Security exception closing GATT: ${e.message}")
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun checkPermissions(context: Context): Boolean {
+        val requiredPermissions = arrayOf(
+            Manifest.permission.BLUETOOTH,
+            Manifest.permission.BLUETOOTH_ADMIN,
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT
+        )
+
+        return requiredPermissions.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
         }
     }
 }

@@ -4,42 +4,49 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.widget.Toast
 
 class HeartRateReceiver(private val onHeartRateReceived: (Int) -> Unit) : BroadcastReceiver() {
     companion object {
         private const val TAG = "HeartRateReceiver"
-        val ACTIONS = listOf(
-            "nodomain.freeyourgadget.gadgetbridge.ACTION_HEARTRATE",
-            "nodomain.freeyourgadget.gadgetbridge.ACTION_REALTIME_HEARTRATE"
-        )
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        Log.d(TAG, "=================== START HEART RATE RECEIVE ===================")
-        Log.d(TAG, "Received intent action: ${intent?.action}")
+        Log.d(TAG, "!!!! RECEIVED BROADCAST !!!!")
+        Log.d(TAG, "Action: ${intent?.action}")
+        Log.d(TAG, "Extras: ${intent?.extras?.keySet()?.joinToString()}")
 
-        intent?.extras?.let { extras ->
-            Log.d(TAG, "All extras keys: ${extras.keySet().joinToString()}")
-            extras.keySet().forEach { key ->
-                Log.d(TAG, "Extra '$key' = '${extras.get(key)}'")
+        try {
+            // Log ALL data from intent
+            intent?.extras?.keySet()?.forEach { key ->
+                val value = intent.extras?.get(key)
+                Log.d(TAG, "Extra '$key' = '$value' (${value?.javaClass?.simpleName})")
             }
 
-            // Try all possible heart rate keys
-            val heartRate = extras.get("heart_rate")?.toString()?.toIntOrNull()
-                ?: extras.get("HEART_RATE_VALUE")?.toString()?.toIntOrNull()
-                ?: extras.get("heartrate")?.toString()?.toIntOrNull()
-                ?: extras.get("EXTRA_HR_DATA")?.toString()?.toIntOrNull()
-                ?: -1
+            // Notify the user we received something (for debugging)
+            val toast = Toast.makeText(context, "Received heart rate broadcast!", Toast.LENGTH_SHORT)
+            toast.show()
+
+            // Try both ways to get heart rate
+            val heartRate = when {
+                intent?.hasExtra("heartrate") == true -> intent.getIntExtra("heartrate", -1)
+                intent?.getStringExtra("value")?.contains("HeartRate=") == true -> {
+                    intent.getStringExtra("value")?.substringAfter("HeartRate=")?.toIntOrNull() ?: -1
+                }
+                else -> -1
+            }
 
             Log.d(TAG, "Parsed heart rate: $heartRate")
 
             if (heartRate > 0) {
-                Log.d(TAG, "Calling onHeartRateReceived with value: $heartRate")
+                Log.d(TAG, "Valid heart rate received: $heartRate")
                 onHeartRateReceived(heartRate)
-                Log.d(TAG, "Successfully called onHeartRateReceived")
+                Toast.makeText(context, "Heart Rate: $heartRate", Toast.LENGTH_SHORT).show()
             }
-        } ?: Log.d(TAG, "No extras in intent")
 
-        Log.d(TAG, "=================== END HEART RATE RECEIVE ===================")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing heart rate: ${e.message}", e)
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }

@@ -1,9 +1,8 @@
 package com.mateusz.frontend
 
+import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.content.Intent
 import android.os.Build
-import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
@@ -35,7 +34,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,9 +50,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -68,6 +63,7 @@ sealed class WalkingSessionResult {
     data class Error(val message: String) : WalkingSessionResult()
 }
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 fun NewWalkingSessionScreen(
     onSaveChoice: (LocalDate?) -> Unit,
@@ -83,54 +79,42 @@ fun NewWalkingSessionScreen(
     var lastHeartRateUpdate by remember { mutableLongStateOf(0L) }
     var isReceivingData by remember { mutableStateOf(false) }
 
-    // Add a coroutine scope for the polling
-    val scope = rememberCoroutineScope()
-    var pollingJob by remember { mutableStateOf<Job?>(null) }
-    var isPolling by remember { mutableStateOf(false) }
+    // First, get the BluetoothManager
+    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    val bluetoothAdapter = bluetoothManager.adapter
 
-    // State for Gadgetbridge availability
-    val isGadgetBridgeInstalled = remember {
-        GadgetBridgeHelper.isGadgetBridgeInstalled(context)
+    // Then create a remember variable to check if Bluetooth is enabled
+    val isBluetoothEnabled = remember {
+        bluetoothAdapter?.isEnabled ?: false
     }
 
-    // Function to start polling
-    fun startPolling() {
-        Log.d("HeartRatePolling", "Starting polling...")
-        pollingJob?.cancel()
-        isPolling = true
-        pollingJob = scope.launch {
-            Log.d("HeartRatePolling", "Inside launch block")
-            try {
-                while (isActive) {
-                    Log.d("HeartRatePolling", "Polling iteration started")
-                    try {
-                        val heartRate = GadgetbridgeDatabase.getLatestHeartRate(context)
-                        Log.d("HeartRatePolling", "Got heart rate: $heartRate")
-                        if (heartRate > 0) {
-                            heartRateReadings.add(heartRate)
-                            lastHeartRateUpdate = System.currentTimeMillis()
-                            isReceivingData = true
-                            averagePulse = heartRateReadings.average().toInt()
-                            Log.d("HeartRatePolling", "Updated average pulse to: $averagePulse")
-                        }
-                    } catch (e: Exception) {
-                        Log.e("HeartRatePolling", "Error in polling: ${e.message}", e)
-                    }
-                    delay(1000)
-                }
-            } finally {
-                Log.d("HeartRatePolling", "Polling loop ended")
-                isPolling = false
-            }
-        }
-    }
-
-    // Clean up when leaving the screen
+    // Use HeartRateManager instead of GadgetbridgeDbHelper
     DisposableEffect(Unit) {
+        HeartRateManager.startHeartRateMonitoring(context) { heartRate ->
+            heartRateReadings.add(heartRate)
+            averagePulse = heartRateReadings.average().toInt()
+            lastHeartRateUpdate = System.currentTimeMillis()
+            isReceivingData = true
+        }
+
         onDispose {
-            pollingJob?.cancel()
+            HeartRateManager.stopHeartRateMonitoring()
         }
     }
+
+    // Add debug text to show readings count and last update
+//    if (isBluetoothEnabled) {
+//        Spacer(modifier = Modifier.height(8.dp))
+//        Text(
+//            text = "Readings: ${heartRateReadings.size}, Average: $averagePulse, " +
+//                    "Last update: ${if (lastHeartRateUpdate > 0)
+//                        "${(System.currentTimeMillis() - lastHeartRateUpdate) / 1000}s ago"
+//                    else "never"}",
+//            color = Color.Gray,
+//            fontSize = 12.sp,
+//            modifier = Modifier.padding(horizontal = 16.dp)
+//        )
+//    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -173,72 +157,44 @@ fun NewWalkingSessionScreen(
                         disabledLabelColor = colorResource(id = R.color.light_blue),
                     ),
                     enabled = false,
-                    trailingIcon = if (heartRateReadings.isNotEmpty()) {
-                        { Text("(${heartRateReadings.size} readings)") }
-                    } else null
                 )
 
                 IconButton(
                     onClick = {
-                        if (isGadgetBridgeInstalled) {
-                            Log.d("HeartRatePolling", "IconButton clicked, isPolling: $isPolling")
-                            if (isPolling) {
-                                Log.d("HeartRatePolling", "Stopping polling")
-                                pollingJob?.cancel()
-                                isPolling = false
-                            } else {
-                                Log.d("HeartRatePolling", "Starting polling")
-                                startPolling()
-                            }
-                            // Open Gadgetbridge
-                            val intent = context.packageManager.getLaunchIntentForPackage(GadgetBridgeHelper.GADGETBRIDGE_PACKAGE)
-                            if (intent != null) {
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                context.startActivity(intent)
-                            }
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "Please install Gadgetbridge from F-Droid to connect with PineTime",
-                                Toast.LENGTH_LONG
-                            ).show()
+                        if (!isBluetoothEnabled) {
+                            Toast.makeText(context, "Please enable Bluetooth in phone settings", Toast.LENGTH_LONG).show()
                         }
                     }
                 ) {
                     Icon(
                         painter = painterResource(
-                            id = if (isPolling && isReceivingData) R.drawable.ic_watch_receiving
-                            else if (isGadgetBridgeInstalled) R.drawable.ic_watch_connected
+                            id = if (isReceivingData) R.drawable.ic_watch_receiving
+                            else if (isBluetoothEnabled) R.drawable.ic_watch_connected
                             else R.drawable.ic_watch_disconnected
                         ),
-                        contentDescription = if (isPolling) "Stop monitoring"
-                        else if (isGadgetBridgeInstalled) "Start monitoring"
-                        else "Install Gadgetbridge",
-                        tint = if (isPolling && isReceivingData) Color.Green
-                        else if (isGadgetBridgeInstalled) colorResource(id = R.color.light_blue)
+                        contentDescription = if (isReceivingData) "Stop monitoring"
+                        else "Enable Bluetooth",
+                        tint = if (isReceivingData) Color.Green
+                        else if (isBluetoothEnabled) colorResource(id = R.color.light_blue)
                         else Color.Gray
                     )
                 }
             }
 
-            if (!isGadgetBridgeInstalled) {
+            if (!isBluetoothEnabled) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Install Gadgetbridge to connect with PineTime",
+                    text = "Enable Bluetooth to connect witch external device",
                     color = Color.Gray,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
 
-            if (isGadgetBridgeInstalled) {
+            if (isBluetoothEnabled) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Debug: ${heartRateReadings.size} readings, Last update: ${
-                        if (lastHeartRateUpdate > 0)
-                            "${(System.currentTimeMillis() - lastHeartRateUpdate) / 1000}s ago"
-                        else "never"
-                    }",
+                    text = "Data read status: ${heartRateReadings.size} heart rate reading(s)",
                     color = Color.Gray,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -269,7 +225,7 @@ fun NewWalkingSessionScreen(
             // Save Button
             Button(
                 onClick = {
-                    pollingJob?.cancel() // Stop polling when saving
+//                    pollingJob?.cancel() // Stop polling when saving
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeAddNewWalkingSessionRequest(duration, averagePulse, password, context)
                         withContext(Dispatchers.Main) {
@@ -310,7 +266,7 @@ fun NewWalkingSessionScreen(
             // Cancel Button
             OutlinedButton(
                 onClick = {
-                    pollingJob?.cancel() // Stop polling when canceling
+//                    pollingJob?.cancel() // Stop polling when canceling
                     onCancelChoice(selectedDate)
                 },
                 modifier = Modifier

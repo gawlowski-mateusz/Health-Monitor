@@ -2,6 +2,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <queries>
+        <package android:name="nodomain.freeyourgadget.gadgetbridge" />
+        <provider android:authorities="nodomain.freeyourgadget.gadgetbridge.provider.db" />
+    </queries>
+
+<!--    <uses-permission android:name="nodomain.freeyourgadget.gadgetbridge.permission.READ_DATA" />-->
+<!--    <uses-permission android:name="nodomain.freeyourgadget.gadgetbridge.RECEIVE_HEART_RATE" />-->
+
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!-- For Android 12 and above -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- For Android 11 and below -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH"/>
@@ -10,19 +35,9 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
-    <uses-permission android:name="nodomain.freeyourgadget.gadgetbridge.PERMISSION_RECEIVE_HR_DATA" />
-    <uses-permission android:name="nodomain.freeyourgadget.gadgetbridge.PERMISSION_SEND_HR_DATA" />
     <uses-permission android:name="android.permission.BROADCAST_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BROADCASTS" />
-    <uses-permission android:name="nodomain.freeyourgadget.gadgetbridge.permission.READ_DATA" />
-
-    <queries>
-        <package android:name="nodomain.freeyourgadget.gadgetbridge" />
-        <provider android:authorities="nodomain.freeyourgadget.gadgetbridge.provider" />
-        <provider android:authorities="nodomain.freeyourgadget.gadgetbridge" />
-    </queries>
 
     <application
         android:networkSecurityConfig="@xml/network_security_config"
@@ -35,6 +50,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Frontend"
         tools:targetApi="31">
+
+        <service
+            android:name=".BackgroundService"
+            android:enabled="true"
+            android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -45,20 +66,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- Add this inside your application tag -->
-        <receiver
-            android:name=".HeartRateReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="TODO"
-            tools:ignore="ExportedReceiver">
-            <intent-filter>
-                <action android:name="nodomain.freeyourgadget.gadgetbridge.ACTION_HEARTRATE" />
-                <action android:name="nodomain.freeyourgadget.gadgetbridge.ACTION_REALTIME_HEARTRATE" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </receiver>
     </application>
 
 </manifest>
