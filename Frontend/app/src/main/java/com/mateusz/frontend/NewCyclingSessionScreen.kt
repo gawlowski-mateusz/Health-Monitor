@@ -1,10 +1,14 @@
 package com.mateusz.frontend
 
+import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.os.Build
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,8 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -21,8 +29,12 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -53,8 +67,9 @@ sealed class CyclingSessionResult {
     data class Error(val message: String) : CyclingSessionResult()
 }
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-fun NewCyclingSessionScreen (
+fun NewCyclingSessionScreen(
     onSaveChoice: (LocalDate?) -> Unit,
     onCancelChoice: (LocalDate?) -> Unit
 ) {
@@ -63,6 +78,47 @@ fun NewCyclingSessionScreen (
     val password by remember { mutableStateOf<String?>(null) }
     val selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     val context = LocalContext.current
+
+    val heartRateReadings = remember { mutableStateListOf<Int>() }
+    var lastHeartRateUpdate by remember { mutableLongStateOf(0L) }
+    var isReceivingData by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
+
+    // First, get the BluetoothManager
+    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    val bluetoothAdapter = bluetoothManager.adapter
+
+    val isBluetoothEnabled = remember {
+        bluetoothAdapter?.isEnabled ?: false
+    }
+
+    // Function to handle cleanup and navigation
+    val handleNavigation = { date: LocalDate?, navigateAction: (LocalDate?) -> Unit ->
+        HeartRateManager.stopHeartRateMonitoring()
+        isReceivingData = false
+        navigateAction(date)
+    }
+
+    DisposableEffect(Unit) {
+        HeartRateManager.startHeartRateMonitoring(context) { heartRate ->
+            heartRateReadings.add(heartRate)
+            averagePulse = heartRateReadings.average().toInt()
+            lastHeartRateUpdate = System.currentTimeMillis()
+            isReceivingData = true
+        }
+
+        onDispose {
+            HeartRateManager.stopHeartRateMonitoring()
+            isReceivingData = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            duration++
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -86,59 +142,133 @@ fun NewCyclingSessionScreen (
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Average pulse TextField
-            OutlinedTextField(
-                value = averagePulse.toString(),
-                onValueChange = {
-                    averagePulse = it.toInt()
-                },
-                label = { Text("Average pulse") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            // Average pulse TextField with Gadgetbridge button
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorResource(id = R.color.light_blue),
-                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = "$averagePulse BPM",
+                    onValueChange = { }, // Empty because we don't want manual changes
+                    label = { Text("Average pulse") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colorResource(id = R.color.black),
+                        focusedLabelColor = colorResource(id = R.color.black),
+                        disabledTextColor = Color.Black,
+                        disabledBorderColor = colorResource(id = R.color.black),
+                        disabledLabelColor = colorResource(id = R.color.black),
+                    ),
+                    enabled = false,
                 )
-            )
+
+                IconButton(
+                    onClick = {
+                        if (!isBluetoothEnabled) {
+                            Toast.makeText(context, "Please enable Bluetooth in phone settings", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            id = if (isReceivingData) R.drawable.ic_watch_receiving
+                            else if (isBluetoothEnabled) R.drawable.ic_watch_connected
+                            else R.drawable.ic_watch_disconnected
+                        ),
+                        contentDescription = if (isReceivingData) "Stop monitoring"
+                        else "Enable Bluetooth",
+                        tint = if (isReceivingData) Color.Green
+                        else if (isBluetoothEnabled) colorResource(id = R.color.light_blue)
+                        else Color.Gray
+                    )
+                }
+            }
+
+            if (!isBluetoothEnabled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Enable Bluetooth to connect with external device",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
+            if (isBluetoothEnabled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Data read status: ${heartRateReadings.size} heart rate reading(s)",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Duration TextField
-            OutlinedTextField(
-                value = duration.toString(),
-                onValueChange = {
-                    duration = it.toInt()
-                },
-                label = { Text("Duration") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorResource(id = R.color.light_blue),
-                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Function to format duration
+                fun formatDuration(seconds: Int): String {
+                    return if (seconds < 60) {
+                        "00 minutes %02d seconds".format(seconds)
+                    } else {
+                        val minutes = seconds / 60
+                        val remainingSeconds = seconds % 60
+                        "%02d minutes %02d seconds".format(minutes, remainingSeconds)
+                    }
+                }
+
+                // Duration TextField
+                OutlinedTextField(
+                    value = formatDuration(duration),
+                    onValueChange = { },
+                    label = { Text("Duration") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colorResource(id = R.color.black),
+                        focusedLabelColor = colorResource(id = R.color.black),
+                        disabledTextColor = Color.Black,
+                        disabledBorderColor = colorResource(id = R.color.black),
+                        disabledLabelColor = colorResource(id = R.color.black),
+                    ),
+                    enabled = false,
                 )
-            )
+
+                IconButton(
+                    onClick = { duration = 0 }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Reset timer"
+                    )
+                }
+            }
 
             // Save Button
             Button(
                 onClick = {
+                    isProcessing = true
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeAddNewCyclingSessionRequest(duration, averagePulse, password, context)
                         withContext(Dispatchers.Main) {
                             when (result) {
                                 is CyclingSessionResult.Success -> {
-                                    onSaveChoice(selectedDate)
+                                    handleNavigation(selectedDate, onSaveChoice)
                                 }
                                 is CyclingSessionResult.Error -> {
-                                    Toast.makeText(
-                                        context,
-                                        result.message,
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                    isProcessing = false
+                                    Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
                                 }
                             }
                         }
                     }
                 },
+                enabled = !isProcessing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 42.dp, start = 32.dp, end = 32.dp)
@@ -150,7 +280,7 @@ fun NewCyclingSessionScreen (
                 )
             ) {
                 Text(
-                    "Save",
+                    if (isProcessing) "Processing..." else "Save",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -160,18 +290,14 @@ fun NewCyclingSessionScreen (
 
             // Cancel Button
             OutlinedButton(
-                onClick = {
-                    onCancelChoice(selectedDate)
-                },
+                onClick = { handleNavigation(selectedDate, onCancelChoice) },
+                enabled = !isProcessing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp)
                     .height(56.dp),
                 shape = RoundedCornerShape(50),
-                border = BorderStroke(
-                    2.dp,
-                    color = colorResource(id = R.color.light_blue)
-                )
+                border = BorderStroke(2.dp, color = colorResource(id = R.color.light_blue))
             ) {
                 Text(
                     "Cancel",
@@ -279,6 +405,7 @@ private suspend fun makeAddNewCyclingSessionRequest(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Preview(showBackground = true)
 @Composable
 fun PreviewNewCyclingSessionScreen() {
