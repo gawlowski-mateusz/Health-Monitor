@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -28,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -50,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -78,17 +82,23 @@ fun NewWalkingSessionScreen(
     val heartRateReadings = remember { mutableStateListOf<Int>() }
     var lastHeartRateUpdate by remember { mutableLongStateOf(0L) }
     var isReceivingData by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
 
     // First, get the BluetoothManager
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val bluetoothAdapter = bluetoothManager.adapter
 
-    // Then create a remember variable to check if Bluetooth is enabled
     val isBluetoothEnabled = remember {
         bluetoothAdapter?.isEnabled ?: false
     }
 
-    // Use HeartRateManager instead of GadgetbridgeDbHelper
+    // Function to handle cleanup and navigation
+    val handleNavigation = { date: LocalDate?, navigateAction: (LocalDate?) -> Unit ->
+        HeartRateManager.stopHeartRateMonitoring()
+        isReceivingData = false
+        navigateAction(date)
+    }
+
     DisposableEffect(Unit) {
         HeartRateManager.startHeartRateMonitoring(context) { heartRate ->
             heartRateReadings.add(heartRate)
@@ -99,22 +109,16 @@ fun NewWalkingSessionScreen(
 
         onDispose {
             HeartRateManager.stopHeartRateMonitoring()
+            isReceivingData = false
         }
     }
 
-    // Add debug text to show readings count and last update
-//    if (isBluetoothEnabled) {
-//        Spacer(modifier = Modifier.height(8.dp))
-//        Text(
-//            text = "Readings: ${heartRateReadings.size}, Average: $averagePulse, " +
-//                    "Last update: ${if (lastHeartRateUpdate > 0)
-//                        "${(System.currentTimeMillis() - lastHeartRateUpdate) / 1000}s ago"
-//                    else "never"}",
-//            color = Color.Gray,
-//            fontSize = 12.sp,
-//            modifier = Modifier.padding(horizontal = 16.dp)
-//        )
-//    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            duration++
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -144,17 +148,17 @@ fun NewWalkingSessionScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
-                    value = averagePulse.toString(),
+                    value = "$averagePulse BPM",
                     onValueChange = { }, // Empty because we don't want manual changes
                     label = { Text("Average pulse") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colorResource(id = R.color.light_blue),
-                        focusedLabelColor = colorResource(id = R.color.light_blue),
+                        focusedBorderColor = colorResource(id = R.color.black),
+                        focusedLabelColor = colorResource(id = R.color.black),
                         disabledTextColor = Color.Black,
-                        disabledBorderColor = colorResource(id = R.color.light_blue),
-                        disabledLabelColor = colorResource(id = R.color.light_blue),
+                        disabledBorderColor = colorResource(id = R.color.black),
+                        disabledLabelColor = colorResource(id = R.color.black),
                     ),
                     enabled = false,
                 )
@@ -172,6 +176,7 @@ fun NewWalkingSessionScreen(
                             else if (isBluetoothEnabled) R.drawable.ic_watch_connected
                             else R.drawable.ic_watch_disconnected
                         ),
+
                         contentDescription = if (isReceivingData) "Stop monitoring"
                         else "Enable Bluetooth",
                         tint = if (isReceivingData) Color.Green
@@ -203,37 +208,63 @@ fun NewWalkingSessionScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Duration TextField
-            OutlinedTextField(
-                value = duration.toString(),
-                onValueChange = {
-                    try {
-                        duration = it.toIntOrNull() ?: 0
-                    } catch (e: NumberFormatException) {
-                        // Handle invalid input
-                    }
-                },
-                label = { Text("Duration") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorResource(id = R.color.light_blue),
-                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Function to format duration
+                fun formatDuration(seconds: Int): String {
+                    return if (seconds < 60) {
+                        "00 minutes %02d seconds".format(seconds)
+                    } else {
+                        val minutes = seconds / 60
+                        val remainingSeconds = seconds % 60
+                        "%02d minutes %02d seconds".format(minutes, remainingSeconds)
+                    }
+                }
+
+                // Duration TextField
+                OutlinedTextField(
+                    value = formatDuration(duration),
+                    onValueChange = { },
+                    label = { Text("Duration") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colorResource(id = R.color.black),
+                        focusedLabelColor = colorResource(id = R.color.black),
+                        disabledTextColor = Color.Black,
+                        disabledBorderColor = colorResource(id = R.color.black),
+                        disabledLabelColor = colorResource(id = R.color.black),
+                    ),
+                    enabled = false,
                 )
-            )
+
+                IconButton(
+                    onClick = {
+                        duration = 0
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Reset timer"
+                    )
+                }
+            }
 
             // Save Button
             Button(
                 onClick = {
-//                    pollingJob?.cancel() // Stop polling when saving
+                    isProcessing = true
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeAddNewWalkingSessionRequest(duration, averagePulse, password, context)
                         withContext(Dispatchers.Main) {
                             when (result) {
                                 is WalkingSessionResult.Success -> {
-                                    onSaveChoice(selectedDate)
+                                    handleNavigation(selectedDate, onSaveChoice)
                                 }
                                 is WalkingSessionResult.Error -> {
+                                    isProcessing = false
                                     Toast.makeText(
                                         context,
                                         result.message,
@@ -244,6 +275,7 @@ fun NewWalkingSessionScreen(
                         }
                     }
                 },
+                enabled = !isProcessing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 42.dp, start = 32.dp, end = 32.dp)
@@ -255,7 +287,7 @@ fun NewWalkingSessionScreen(
                 )
             ) {
                 Text(
-                    "Save",
+                    if (isProcessing) "Processing..." else "Save",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -265,10 +297,8 @@ fun NewWalkingSessionScreen(
 
             // Cancel Button
             OutlinedButton(
-                onClick = {
-//                    pollingJob?.cancel() // Stop polling when canceling
-                    onCancelChoice(selectedDate)
-                },
+                onClick = { handleNavigation(selectedDate, onCancelChoice) },
+                enabled = !isProcessing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp)
