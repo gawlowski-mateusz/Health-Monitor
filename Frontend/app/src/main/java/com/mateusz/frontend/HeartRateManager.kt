@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
@@ -108,6 +109,8 @@ object HeartRateManager {
                         Log.d(TAG, "Connected to GATT server")
                         isConnecting = false
                         try {
+                            // Request a higher connection priority for better responsiveness
+                            gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                             gatt.discoverServices()
                         } catch (e: SecurityException) {
                             Log.e(TAG, "Security exception discovering services: ${e.message}")
@@ -129,17 +132,39 @@ object HeartRateManager {
             override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     val service = gatt.getService(UUID.fromString(HEART_RATE_SERVICE_UUID))
-                    val characteristic = service?.getCharacteristic(UUID.fromString(HEART_RATE_MEASUREMENT_CHAR_UUID))
-
-                    if (characteristic != null) {
-                        try {
-                            gatt.setCharacteristicNotification(characteristic, true)
-                        } catch (e: SecurityException) {
-                            Log.e(TAG, "Security exception setting notification: ${e.message}")
-                            disconnect()
-                            scheduleReconnect(context)
-                        }
+                    if (service == null) {
+                        Log.e(TAG, "Heart Rate service not found!")
+                        return
                     }
+
+                    val characteristic = service.getCharacteristic(UUID.fromString(HEART_RATE_MEASUREMENT_CHAR_UUID))
+                    if (characteristic == null) {
+                        Log.e(TAG, "Heart Rate Measurement characteristic not found!")
+                        return
+                    }
+
+                    try {
+                        // Enable local notifications
+                        gatt.setCharacteristicNotification(characteristic, true)
+
+                        // Write to the Client Characteristic Configuration Descriptor (CCCD)
+                        val descriptor = characteristic.getDescriptor(
+                            UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")  // CCCD UUID
+                        )
+                        if (descriptor != null) {
+                            Log.d(TAG, "Writing to CCCD")
+                            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                            gatt.writeDescriptor(descriptor)
+                        } else {
+                            Log.e(TAG, "CCCD not found!")
+                        }
+                    } catch (e: SecurityException) {
+                        Log.e(TAG, "Security exception setting notification: ${e.message}")
+                        disconnect()
+                        scheduleReconnect(context)
+                    }
+                } else {
+                    Log.e(TAG, "Service discovery failed with status: $status")
                 }
             }
 
@@ -149,20 +174,36 @@ object HeartRateManager {
                 value: ByteArray
             ) {
                 if (characteristic.uuid == UUID.fromString(HEART_RATE_MEASUREMENT_CHAR_UUID)) {
-                    val flag = value[0].toInt()
-                    val heartRate = if (flag and 0x1 != 0) {
-                        (value[1].toInt() and 0xFF) + (value[2].toInt() shl 8)
-                    } else {
-                        value[1].toInt() and 0xFF
+                    try {
+                        val flag = value[0].toInt()
+                        val heartRate = if (flag and 0x1 != 0) {
+                            (value[1].toInt() and 0xFF) + (value[2].toInt() shl 8)
+                        } else {
+                            value[1].toInt() and 0xFF
+                        }
+                        Log.d(TAG, "Heart rate received: $heartRate")
+                        onHeartRateReceived(heartRate)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing heart rate: ${e.message}")
                     }
-                    Log.d(TAG, "Heart rate received: $heartRate")
-                    onHeartRateReceived(heartRate)
+                }
+            }
+
+            override fun onDescriptorWrite(
+                gatt: BluetoothGatt,
+                descriptor: BluetoothGattDescriptor,
+                status: Int
+            ) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    Log.d(TAG, "CCCD write successful")
+                } else {
+                    Log.e(TAG, "CCCD write failed with status: $status")
                 }
             }
         }
 
         try {
-            bluetoothGatt = device.connectGatt(context, false, gattCallback)
+            bluetoothGatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         } catch (e: SecurityException) {
             Log.e(TAG, "Security exception connecting to device: ${e.message}")
             isConnecting = false
