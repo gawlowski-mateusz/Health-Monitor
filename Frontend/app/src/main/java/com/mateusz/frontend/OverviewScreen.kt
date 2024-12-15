@@ -2,6 +2,7 @@ package com.mateusz.frontend
 
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
@@ -27,8 +28,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,6 +80,71 @@ fun OverviewScreen(
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     val calendar = Calendar.getInstance()
 
+    var stepsCount by remember { mutableIntStateOf(0) }
+    var lastSentStepCount by remember { mutableStateOf(-1) }
+    var currentPulse by remember { mutableIntStateOf(0) }
+    var isReceivingData by remember { mutableStateOf(false) }
+
+    // First, get the BluetoothManager
+    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    val bluetoothAdapter = bluetoothManager.adapter
+
+    val isBluetoothEnabled = remember {
+        bluetoothAdapter?.isEnabled ?: false
+    }
+
+    // Function to handle cleanup and navigation
+    val handleNavigation = { navigateAction: () -> Unit ->
+        BluetoothMeasurementsManager.stopMonitoring()
+        isReceivingData = false
+        navigateAction()
+    }
+
+    DisposableEffect(Unit) {
+        BluetoothMeasurementsManager.startMonitoring(
+            context,
+            onHeartRateReceived = { heartRate ->
+                currentPulse = heartRate
+                isReceivingData = true
+            },
+            onStepCountReceived = { steps ->
+                stepsCount = steps
+                // Only make request if steps count has changed
+                if (steps != lastSentStepCount) {
+                    lastSentStepCount = steps
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val result = makeUpdateStepsRequest(stepsCount, context)
+                        withContext(Dispatchers.Main) {
+                            when (result) {
+                                is StepsUpdateResult.Success -> {
+
+                                }
+                                is StepsUpdateResult.Error -> {
+                                    Toast.makeText(
+                                        context,
+                                        result.message,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        }
+                        val fetchResult = fetchOverviewData(
+                            context, selectedDate?.format(DateTimeFormatter.ISO_DATE).toString()
+                        )
+                        overviewData = fetchResult as Map<String, Any>?
+
+                    }
+                }
+            }
+        )
+
+        onDispose {
+            BluetoothMeasurementsManager.stopMonitoring()
+            isReceivingData = false
+            lastSentStepCount = -1  // Reset the last sent count
+        }
+    }
+
     // Fetch overview data when the screen is first composed
     LaunchedEffect(Unit) {
         val result = fetchOverviewData(
@@ -121,7 +189,7 @@ fun OverviewScreen(
                         .padding(end = 16.dp)
                 )
 
-                IconButton(onClick = { onViewProfileChoice() }) {
+                IconButton(onClick = { handleNavigation(onViewProfileChoice) }) {
                     Icon(
                         imageVector = Icons.Default.AccountBox,
                         contentDescription = "Calendar"
@@ -166,7 +234,7 @@ fun OverviewScreen(
                                             "Logout successful",
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                        onLogOutChoice()
+                                        handleNavigation(onLogOutChoice)
                                     }
                                     is LogoutResult.Error -> {
                                         Toast.makeText(
@@ -207,7 +275,7 @@ fun OverviewScreen(
                 modifier = Modifier
                     .width(300.dp)
                     .clickable {
-                        onEditStepsChoice()
+                        handleNavigation(onEditStepsChoice)
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -237,7 +305,7 @@ fun OverviewScreen(
                 modifier = Modifier
                     .width(300.dp)
                     .clickable {
-                        onWalkingSessionsChoice(selectedDate)
+                        handleNavigation { onWalkingSessionsChoice(selectedDate) }
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -264,7 +332,7 @@ fun OverviewScreen(
                 modifier = Modifier
                     .width(300.dp)
                     .clickable {
-                        onRunningSessionsChoice(selectedDate)
+                        handleNavigation { onRunningSessionsChoice(selectedDate) }
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -291,7 +359,7 @@ fun OverviewScreen(
                 modifier = Modifier
                     .width(300.dp)
                     .clickable {
-                        onCyclingSessionsChoice(selectedDate)
+                        handleNavigation { onCyclingSessionsChoice(selectedDate) }
                     },
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -434,6 +502,93 @@ private fun parseOverviewData(response: String): Map<String, Any?>? {
         )
     } catch (e: Exception) {
         null
+    }
+}
+
+private suspend fun makeUpdateStepsRequest(
+    count: Int?,
+    context: Context
+): StepsUpdateResult {
+    val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
+
+    val connection = withContext(Dispatchers.IO) {
+        url.openConnection() as HttpURLConnection
+    }
+
+    return try {
+        connection.requestMethod = "PATCH"
+        connection.setRequestProperty("Content-Type", "application/json")
+
+        // Retrieve the JWT token from SharedPreferences
+        val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+        val jwtToken = sharedPreferences.getString("access_token", null)
+            ?: return StepsUpdateResult.Error("Please login to update steps goal")
+
+        // Add the JWT token to the Authorization header
+        connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+        connection.doOutput = true
+
+        // Create JSON object for the steps update data
+        val jsonBody = JSONObject().apply {
+            count?.let { put("count", it) }
+        }
+
+        // Write the JSON data to the output stream
+        withContext(Dispatchers.IO) {
+            OutputStreamWriter(connection.outputStream).apply {
+                write(jsonBody.toString())
+                flush()
+                close()
+            }
+        }
+
+        when (val responseCode = connection.responseCode) {
+            HttpURLConnection.HTTP_CREATED -> {
+                StepsUpdateResult.Success
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                StepsUpdateResult.Error("Session expired. Please login again")
+            }
+            HttpURLConnection.HTTP_BAD_REQUEST -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Invalid steps count"
+                    } catch (e: Exception) {
+                        "Invalid steps goal"
+                    }
+                } ?: "Invalid steps goal"
+                StepsUpdateResult.Error(errorMessage)
+            }
+            else -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Failed to update steps goal: $responseCode"
+                    } catch (e: Exception) {
+                        "Failed to update steps goal: $responseCode"
+                    }
+                } ?: "Failed to update steps goal: $responseCode"
+                StepsUpdateResult.Error(errorMessage)
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        val errorMessage = when (e) {
+            is java.net.ConnectException -> "Could not connect to server"
+            is java.net.SocketTimeoutException -> "Connection timed out"
+            is java.net.UnknownHostException -> "No internet connection"
+            else -> "Error updating steps goal: ${e.localizedMessage}"
+        }
+        StepsUpdateResult.Error(errorMessage)
+    } finally {
+        connection.disconnect()
     }
 }
 

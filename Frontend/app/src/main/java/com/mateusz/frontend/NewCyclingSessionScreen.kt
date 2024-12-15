@@ -94,21 +94,25 @@ fun NewCyclingSessionScreen(
 
     // Function to handle cleanup and navigation
     val handleNavigation = { date: LocalDate?, navigateAction: (LocalDate?) -> Unit ->
-        HeartRateManager.stopHeartRateMonitoring()
+        BluetoothMeasurementsManager.stopMonitoring()
         isReceivingData = false
         navigateAction(date)
     }
 
     DisposableEffect(Unit) {
-        HeartRateManager.startHeartRateMonitoring(context) { heartRate ->
-            heartRateReadings.add(heartRate)
-            averagePulse = heartRateReadings.average().toInt()
-            lastHeartRateUpdate = System.currentTimeMillis()
-            isReceivingData = true
-        }
+        BluetoothMeasurementsManager.startMonitoring(
+            context,
+            onHeartRateReceived = { heartRate ->
+                heartRateReadings.add(heartRate)
+                averagePulse = heartRateReadings.average().toInt()
+                lastHeartRateUpdate = System.currentTimeMillis()
+                isReceivingData = true
+            },
+            onStepCountReceived = {}
+        )
 
         onDispose {
-            HeartRateManager.stopHeartRateMonitoring()
+            BluetoothMeasurementsManager.stopMonitoring()
             isReceivingData = false
         }
     }

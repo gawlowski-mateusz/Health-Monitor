@@ -94,21 +94,25 @@ fun NewRunningSessionScreen(
 
     // Function to handle cleanup and navigation
     val handleNavigation = { date: LocalDate?, navigateAction: (LocalDate?) -> Unit ->
-        HeartRateManager.stopHeartRateMonitoring()
+        BluetoothMeasurementsManager.stopMonitoring()
         isReceivingData = false
         navigateAction(date)
     }
 
     DisposableEffect(Unit) {
-        HeartRateManager.startHeartRateMonitoring(context) { heartRate ->
-            heartRateReadings.add(heartRate)
-            averagePulse = heartRateReadings.average().toInt()
-            lastHeartRateUpdate = System.currentTimeMillis()
-            isReceivingData = true
-        }
+        BluetoothMeasurementsManager.startMonitoring(
+            context,
+            onHeartRateReceived = { heartRate ->
+                heartRateReadings.add(heartRate)
+                averagePulse = heartRateReadings.average().toInt()
+                lastHeartRateUpdate = System.currentTimeMillis()
+                isReceivingData = true
+            },
+            onStepCountReceived = {}
+        )
 
         onDispose {
-            HeartRateManager.stopHeartRateMonitoring()
+            BluetoothMeasurementsManager.stopMonitoring()
             isReceivingData = false
         }
     }
@@ -166,7 +170,11 @@ fun NewRunningSessionScreen(
                 IconButton(
                     onClick = {
                         if (!isBluetoothEnabled) {
-                            Toast.makeText(context, "Please enable Bluetooth in phone settings", Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                context,
+                                "Please enable Bluetooth in phone settings",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 ) {
@@ -254,15 +262,22 @@ fun NewRunningSessionScreen(
                 onClick = {
                     isProcessing = true
                     CoroutineScope(Dispatchers.IO).launch {
-                        val result = makeAddNewRunningSessionRequest(duration, averagePulse, password, context)
+                        val result = makeAddNewRunningSessionRequest(
+                            duration,
+                            averagePulse,
+                            password,
+                            context
+                        )
                         withContext(Dispatchers.Main) {
                             when (result) {
                                 is RunningSessionResult.Success -> {
                                     handleNavigation(selectedDate, onSaveChoice)
                                 }
+
                                 is RunningSessionResult.Error -> {
                                     isProcessing = false
-                                    Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, result.message, Toast.LENGTH_LONG)
+                                        .show()
                                 }
                             }
                         }
@@ -355,9 +370,11 @@ private suspend fun makeAddNewRunningSessionRequest(
             HttpURLConnection.HTTP_CREATED -> {
                 RunningSessionResult.Success
             }
+
             HttpURLConnection.HTTP_UNAUTHORIZED -> {
                 RunningSessionResult.Error("Session expired. Please login again")
             }
+
             HttpURLConnection.HTTP_BAD_REQUEST -> {
                 // Try to get error message from response
                 val errorStream = connection.errorStream
@@ -372,9 +389,11 @@ private suspend fun makeAddNewRunningSessionRequest(
                 } ?: "Invalid running session data"
                 RunningSessionResult.Error(errorMessage)
             }
+
             HttpURLConnection.HTTP_INTERNAL_ERROR -> {
                 RunningSessionResult.Error("Server error. Please try again later")
             }
+
             else -> {
                 // Try to get error message from response
                 val errorStream = connection.errorStream
@@ -382,7 +401,8 @@ private suspend fun makeAddNewRunningSessionRequest(
                 val errorMessage = errorResponse?.let {
                     try {
                         val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Failed to add running session: $responseCode"
+                        jsonError.getString("message")
+                            ?: "Failed to add running session: $responseCode"
                     } catch (e: Exception) {
                         "Failed to add running session: $responseCode"
                     }
@@ -409,7 +429,7 @@ private suspend fun makeAddNewRunningSessionRequest(
 @Preview(showBackground = true)
 @Composable
 fun PreviewNewRunningSessionScreen() {
-    NewRunningSessionScreen (
+    NewRunningSessionScreen(
         onSaveChoice = {},
         onCancelChoice = {}
     )
