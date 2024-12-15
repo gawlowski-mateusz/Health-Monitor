@@ -154,8 +154,8 @@ fun RunningSessionsScreen(
                                             )
                                             RunningCard(
                                                 value = session["duration"] as Int,
-                                                unit = "Minutes",
-                                                description = "Training"
+                                                unit = "Training",
+                                                description = "Duration"
                                             )
                                         }
                                     }
@@ -340,6 +340,23 @@ private fun parseRunningSessions(response: String): List<Map<String, Any>>? {
 
 @Composable
 fun RunningCard(value: Int, unit: String, description: String) {
+    fun formatDuration(seconds: Int): String {
+        if (seconds < 60) {
+            return "00:00:%02d".format(seconds)
+        }
+
+        val hours = seconds / 3600
+        val remainingSecondsAfterHours = seconds % 3600
+        val minutes = remainingSecondsAfterHours / 60
+        val remainingSeconds = remainingSecondsAfterHours % 60
+
+        return if (hours > 0) {
+            "%02d:%02d:%02d".format(hours, minutes, remainingSeconds)
+        } else {
+            "%02d:%02d:%02d".format(0, minutes, remainingSeconds)
+        }
+    }
+
     Card(
         modifier = Modifier
             .width(150.dp)
@@ -357,7 +374,7 @@ fun RunningCard(value: Int, unit: String, description: String) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = value.toString(),
+                text = if (description == "Duration") formatDuration(value) else value.toString(),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )

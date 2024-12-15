@@ -312,7 +312,7 @@ fun OverviewScreen(
                 overviewData?.let { data ->
                     if (data["walkingAvgPulse"] != null && data["walkingDuration"] != null) {
                         HealthCard(data["walkingAvgPulse"], "BPM", "Pulse")
-                        HealthCard(data["walkingDuration"], "Minutes", "Training")
+                        HealthCard(data["walkingDuration"], "Training", "Duration")
                     } else {
                         NoActivityCard(activity = "walking")
                     }
@@ -339,7 +339,7 @@ fun OverviewScreen(
                 overviewData?.let { data ->
                     if (data["runningAvgPulse"] != null && data["runningDuration"] != null) {
                         HealthCard(data["runningAvgPulse"], "BPM", "Pulse")
-                        HealthCard(data["runningDuration"], "Minutes", "Training")
+                        HealthCard(data["runningDuration"], "Training", "Duration")
                     } else {
                         NoActivityCard(activity = "running")
                     }
@@ -366,7 +366,7 @@ fun OverviewScreen(
                 overviewData?.let { data ->
                     if (data["cyclingAvgPulse"] != null && data["cyclingDuration"] != null) {
                         HealthCard(data["cyclingAvgPulse"], "BPM", "Pulse")
-                        HealthCard(data["cyclingDuration"], "Minutes", "Training")
+                        HealthCard(data["cyclingDuration"], "Training", "Duration")
                     } else {
                         NoActivityCard(activity = "cycling")
                     }
@@ -688,6 +688,23 @@ fun StepsProgressBar(steps: Int, stepsGoal: Int) {
 
 @Composable
 fun HealthCard(value: Any?, unit: String?, description: String?) {
+    fun formatDuration(seconds: Int): String {
+        if (seconds < 60) {
+            return "00:00:%02d".format(seconds)
+        }
+
+        val hours = seconds / 3600
+        val remainingSecondsAfterHours = seconds % 3600
+        val minutes = remainingSecondsAfterHours / 60
+        val remainingSeconds = remainingSecondsAfterHours % 60
+
+        return if (hours > 0) {
+            "%02d:%02d:%02d".format(hours, minutes, remainingSeconds)
+        } else {
+            "%02d:%02d:%02d".format(0, minutes, remainingSeconds)
+        }
+    }
+
     Card(
         modifier = Modifier
             .width(150.dp)
@@ -705,7 +722,7 @@ fun HealthCard(value: Any?, unit: String?, description: String?) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = value.toString(),
+                text = if (description == "Duration") formatDuration(value as Int) else value.toString(),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )

@@ -217,12 +217,19 @@ fun NewCyclingSessionScreen(
             ) {
                 // Function to format duration
                 fun formatDuration(seconds: Int): String {
-                    return if (seconds < 60) {
-                        "00 minutes %02d seconds".format(seconds)
+                    if (seconds < 60) {
+                        return "00:00:%02d".format(seconds)
+                    }
+
+                    val hours = seconds / 3600
+                    val remainingSecondsAfterHours = seconds % 3600
+                    val minutes = remainingSecondsAfterHours / 60
+                    val remainingSeconds = remainingSecondsAfterHours % 60
+
+                    return if (hours > 0) {
+                        "%02d:%02d:%02d".format(hours, minutes, remainingSeconds)
                     } else {
-                        val minutes = seconds / 60
-                        val remainingSeconds = seconds % 60
-                        "%02d minutes %02d seconds".format(minutes, remainingSeconds)
+                        "%02d:%02d:%02d".format(0, minutes, remainingSeconds)
                     }
                 }
 
