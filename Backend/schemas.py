@@ -57,7 +57,8 @@ class StepsSchema(Schema):
 
 
 class UpdateStepsSchema(Schema):
-    goal = fields.Int(required=True)
+    goal = fields.Int(required=False)
+    count = fields.Int(required=False)
 
 
 # TRAINING - WALKING, RUNNING, CYCLING

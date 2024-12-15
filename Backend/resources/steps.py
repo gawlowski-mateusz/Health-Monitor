@@ -72,7 +72,6 @@ class StepsGoal(MethodView):
 
         return steps
 
-
     @jwt_required()
     @blp.arguments(UpdateStepsSchema)
     @blp.response(201, UpdateStepsSchema)
@@ -94,8 +93,8 @@ class StepsGoal(MethodView):
 
             # If activity does not exist, then steps also does not exist
             steps = StepsModel(
-                count=0,
-                goal=steps_data["goal"],  # Default to 0 if last_steps_goal is None
+                count=steps_data.get("count", 0),  # Default to 0 if count is not provided
+                goal=steps_data.get("goal", 0),  # Default to 0 if goal is not provided
                 date=datetime.today().strftime('%Y-%m-%d'),
             )
 
@@ -105,7 +104,7 @@ class StepsGoal(MethodView):
             except SQLAlchemyError:
                 abort(500, message="An Error has occurred.")
 
-            # Create activity fo current day
+            # Create activity for current day
             activity = ActivityModel(
                 user_id=user_id,
                 steps_id=steps.steps_id,
@@ -120,8 +119,15 @@ class StepsGoal(MethodView):
         else:
             steps = StepsModel.query.filter_by(steps_id=activity.steps_id).first()
 
-            steps.goal = steps_data["goal"]
+            # Only update fields that are present in the request
+            if "goal" in steps_data:
+                steps.goal = steps_data["goal"]
+            if "count" in steps_data:
+                steps.count = steps_data["count"]
 
-            db.session.commit()
+            try:
+                db.session.commit()
+            except SQLAlchemyError:
+                abort(500, message="An Error has occurred.")
 
-            return {"message": "Steps goal updated successfully"}, 201
+        return {"message": "Steps updated successfully"}, 201
