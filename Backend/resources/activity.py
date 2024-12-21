@@ -4,6 +4,7 @@ from flask.views import MethodView
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_smorest import Blueprint, abort
 from sqlalchemy.exc import SQLAlchemyError
+from datetime import timedelta
 
 from db import db
 from schemas import ActivitySchema
@@ -47,6 +48,96 @@ class ActivityList(MethodView):
 
         # Return the activity with its relationships serialized
         return {"activity": activity_respond}, 200
+
+
+@blp.route("/activity-list-seven-days")
+class ActivityListSevenDays(MethodView):
+    @jwt_required()
+    @blp.arguments(GetActivitySchema)
+    def post(self, activity_data):
+        user_id = get_jwt_identity()
+        end_date = activity_data["date"]
+        start_date = end_date - timedelta(days=6)
+
+        # Create a dictionary with all dates in range initialized to 0
+        date_range = {}
+        current_date = start_date
+        while current_date <= end_date:
+            date_range[current_date.strftime("%Y-%m-%d")] = {
+                "duration": 0,
+                "steps": 0
+            }
+            current_date += timedelta(days=1)
+
+        # Get activities for the user in the date range
+        activities = ActivityModel.query.filter(
+            ActivityModel.user_id == user_id,
+            ActivityModel.date.between(start_date, end_date)
+        ).all()
+
+        # Get training_ids and steps_ids for the activities
+        training_ids = [activity.training_id for activity in activities]
+        steps_ids = [activity.steps_id for activity in activities]
+
+        # Fetch all activities for each type within the date range and training_ids
+        walking_data = WalkingModel.query.filter(
+            WalkingModel.training_id.in_(training_ids),
+            WalkingModel.date.between(start_date, end_date)
+        ).all()
+
+        running_data = RunningModel.query.filter(
+            RunningModel.training_id.in_(training_ids),
+            RunningModel.date.between(start_date, end_date)
+        ).all()
+
+        cycling_data = CyclingModel.query.filter(
+            CyclingModel.training_id.in_(training_ids),
+            CyclingModel.date.between(start_date, end_date)
+        ).all()
+
+        # Fetch steps data
+        steps_data = StepsModel.query.filter(
+            StepsModel.steps_id.in_(steps_ids),
+            StepsModel.date.between(start_date, end_date)
+        ).all()
+
+        # Sum durations and steps for each date
+        for walking in walking_data:
+            date_str = walking.date.strftime("%Y-%m-%d")
+            date_range[date_str]["duration"] += walking.duration
+
+        for running in running_data:
+            date_str = running.date.strftime("%Y-%m-%d")
+            date_range[date_str]["duration"] += running.duration
+
+        for cycling in cycling_data:
+            date_str = cycling.date.strftime("%Y-%m-%d")
+            date_range[date_str]["duration"] += cycling.duration
+
+        for steps in steps_data:
+            date_str = steps.date.strftime("%Y-%m-%d")
+            date_range[date_str]["steps"] = steps.count
+
+        # Format the response
+        activity_data = [
+            {
+                "date": date,
+                "duration": data["duration"],
+                "steps": data["steps"]
+            }
+            for date, data in date_range.items()
+        ]
+
+        # Sort by date
+        activity_data.sort(key=lambda x: x["date"])
+
+        return {
+            "activities": activity_data,
+            "date_range": {
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d")
+            }
+        }, 200
 
 
 @blp.route("/activity-list")
