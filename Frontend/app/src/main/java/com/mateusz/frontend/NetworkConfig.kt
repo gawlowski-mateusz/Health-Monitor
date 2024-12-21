@@ -4,7 +4,10 @@ import android.os.Build
 
 object NetworkConfig {
     private const val EMULATOR_URL = "http://10.0.2.2:8000"
-    private const val DEVICE_URL = "http://192.168.0.192:8000"
+//    private const val DEVICE_URL = "http://192.168.0.192:8000"
+//    private const val DEVICE_URL = "http://192.168.0.59:8000"
+//    private const val DEVICE_URL = "http://192.168.119.41:8000"
+    private const val DEVICE_URL = "http://192.168.0.103:8000"
 
     fun getBaseUrl(): String {
         return if (isEmulator()) EMULATOR_URL else DEVICE_URL

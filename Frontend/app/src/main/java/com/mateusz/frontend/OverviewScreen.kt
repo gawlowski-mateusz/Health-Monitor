@@ -2,17 +2,20 @@ package com.mateusz.frontend
 
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
-import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +28,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,19 +83,12 @@ fun OverviewScreen(
     var overviewData by remember { mutableStateOf<Map<String, Any>?>(null) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     val calendar = Calendar.getInstance()
+    var sevenDaysData by remember { mutableStateOf<Map<String, List<Map<String, Any>>>?>(null) }
 
     var stepsCount by remember { mutableIntStateOf(0) }
-    var lastSentStepCount by remember { mutableStateOf(-1) }
+    var lastSentStepCount by remember { mutableIntStateOf(-1) }
     var currentPulse by remember { mutableIntStateOf(0) }
     var isReceivingData by remember { mutableStateOf(false) }
-
-    // First, get the BluetoothManager
-    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    val bluetoothAdapter = bluetoothManager.adapter
-
-    val isBluetoothEnabled = remember {
-        bluetoothAdapter?.isEnabled ?: false
-    }
 
     // Function to handle cleanup and navigation
     val handleNavigation = { navigateAction: () -> Unit ->
@@ -151,6 +148,11 @@ fun OverviewScreen(
             context, selectedDate?.format(DateTimeFormatter.ISO_DATE).toString()
         )
         overviewData = result as Map<String, Any>?
+
+        val res = fetchSevenDaysData(
+            context, selectedDate?.format(DateTimeFormatter.ISO_DATE)
+        )
+        sevenDaysData = res
     }
 
     Surface(
@@ -269,7 +271,7 @@ fun OverviewScreen(
                 fontWeight = FontWeight.Bold,
                 )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier
@@ -292,7 +294,11 @@ fun OverviewScreen(
 
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            ActivityChart(sevenDaysData)
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Walking
             Text(
@@ -505,6 +511,129 @@ private fun parseOverviewData(response: String): Map<String, Any?>? {
     }
 }
 
+private suspend fun fetchSevenDaysData(
+    context: Context,
+    selectedDate: String? = null
+): Map<String, List<Map<String, Any>>>? {
+    return withContext(Dispatchers.IO) {
+        val url = URL("${NetworkConfig.getBaseUrl()}/activity-list-seven-days")
+        val connection = url.openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Content-Type", "application/json")
+
+            // Retrieve JWT token from SharedPreferences
+            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            val jwtToken = sharedPreferences.getString("access_token", null)
+                ?: run {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Please login to view data", Toast.LENGTH_LONG).show()
+                    }
+                    return@withContext null
+                }
+
+            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+            connection.doOutput = true
+
+            // Use the selected date or default to current date
+            val dateToUse = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+
+            // Create JSON payload with the date
+            val jsonPayload = JSONObject().apply {
+                put("date", dateToUse)
+            }
+
+            OutputStreamWriter(connection.outputStream).use { it.write(jsonPayload.toString()) }
+
+            // Process response
+            when (val responseCode = connection.responseCode) {
+                HttpURLConnection.HTTP_OK -> {
+                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                    parseSevenDaysData(responseText)
+                }
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Session expired. Please login again", Toast.LENGTH_LONG).show()
+                    }
+                    null
+                }
+                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No data found for selected date range", Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
+                else -> {
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    val errorMessage = errorResponse?.let {
+                        try {
+                            val jsonError = JSONObject(it)
+                            jsonError.getString("message")
+                        } catch (e: Exception) {
+                            "Failed to fetch data: $responseCode"
+                        }
+                    } ?: "Failed to fetch data: $responseCode"
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                else -> "Error fetching data: ${e.localizedMessage}"
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            }
+            e.printStackTrace()
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+}
+
+private fun parseSevenDaysData(response: String): Map<String, List<Map<String, Any>>>? {
+    return try {
+        val jsonResponse = JSONObject(response)
+        val activities = jsonResponse.getJSONArray("activities")
+        val dateRange = jsonResponse.getJSONObject("date_range")
+
+        val activityList = mutableListOf<Map<String, Any>>()
+
+        // Parse each day's data
+        for (i in 0 until activities.length()) {
+            val dayData = activities.getJSONObject(i)
+            activityList.add(
+                mapOf(
+                    "date" to dayData.getString("date"),
+                    "duration" to dayData.getInt("duration"),
+                    "steps" to dayData.getInt("steps")
+                )
+            )
+        }
+
+        mapOf(
+            "activities" to activityList,
+            "dateRange" to listOf(
+                mapOf(
+                    "startDate" to dateRange.getString("start_date"),
+                    "endDate" to dateRange.getString("end_date")
+                )
+            )
+        )
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
 private suspend fun makeUpdateStepsRequest(
     count: Int?,
     context: Context
@@ -637,15 +766,6 @@ private suspend fun makeLogoutRequest(context: Context): LogoutResult {
     }
 }
 
-private fun isTokenValid(token: String): Boolean {
-    return try {
-        val parts = token.split(".")
-        parts.size == 3
-    } catch (e: Exception) {
-        false
-    }
-}
-
 private suspend fun clearUserData(context: Context) {
     withContext(Dispatchers.IO) {
         context.getSharedPreferences("auth", Context.MODE_PRIVATE)
@@ -765,6 +885,178 @@ fun NoActivityCard(
     }
 }
 
+@SuppressLint("MissingColorAlphaChannel")
+@Composable
+fun ActivityChart(
+    data: Map<String, List<Map<String, Any>>>?,
+    negativeActivity: String? = null
+) {
+    val activities = data?.get("activities") ?: return
+
+    // Define chart dimensions
+    val chartHeight = 120.dp
+
+    val durationData = activities.map { dayData ->
+        val durationInSeconds = dayData["duration"] as Int
+        val date = dayData["date"] as String
+        durationInSeconds to date
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(300.dp)
+            .padding(16.dp),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFCAF0F8)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+        ) {
+            Text(
+                text = "Activity",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color(0xFF424242),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(start = 8.dp)
+            ) {
+                // Horizontal grid lines
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 56.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    repeat(4) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0xFF424242))
+                        )
+                    }
+                }
+
+                // Y-axis labels
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    val yLabels = listOf("3h+", "2h", "1h", "0")
+                    yLabels.forEach { label ->
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF757575),
+                            modifier = Modifier.offset(x = (-8).dp)
+                        )
+                    }
+                }
+
+                // Chart bars
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .padding(start = 64.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    durationData.forEach { (durationInSeconds, date) ->
+                        val barHeight = when {
+                            durationInSeconds >= 10800 -> chartHeight
+                            durationInSeconds > 0 -> {
+                                val ratio = when {
+                                    durationInSeconds >= 7200 -> {
+                                        val progress = (durationInSeconds - 7200) / 3600f
+                                        2f / 3f + (progress / 3f)
+                                    }
+                                    durationInSeconds >= 3600 -> {
+                                        val progress = (durationInSeconds - 3600) / 3600f
+                                        1f / 3f + (progress / 3f)
+                                    }
+                                    else -> {
+                                        durationInSeconds / 3600f / 3f
+                                    }
+                                }
+                                (ratio * chartHeight.value).dp
+                            }
+                            else -> 0.dp
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .width(32.dp)
+                                .height(barHeight)
+                                .background(
+                                    color = colorResource(id = R.color.light_blue),
+                                    shape = if (date == negativeActivity) {
+                                        RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                                    } else {
+                                        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                                    }
+                                )
+                        )
+                    }
+                }
+            }
+
+            // Date labels in separate row below the chart
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 72.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                durationData.forEach { (_, date) ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = date.substring(8..9),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF757575)
+                        )
+                        Text(
+                            text = when (date.substring(5..6)) {
+                                "01" -> "Jan"
+                                "02" -> "Feb"
+                                "03" -> "Mar"
+                                "04" -> "Apr"
+                                "05" -> "May"
+                                "06" -> "Jun"
+                                "07" -> "Jul"
+                                "08" -> "Aug"
+                                "09" -> "Sep"
+                                "10" -> "Oct"
+                                "11" -> "Nov"
+                                "12" -> "Dec"
+                                else -> ""
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF757575)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun PreviewOverviewScreen() {
@@ -776,4 +1068,56 @@ fun PreviewOverviewScreen() {
         onRunningSessionsChoice = {},
         onCyclingSessionsChoice = {},
     )
+}
+
+@Preview
+@Composable
+fun NoActivityChart() {
+    val sampleData = mapOf(
+        "activities" to listOf(
+            mapOf(
+                "date" to "2024-12-15",
+                "duration" to 5220,  // 1h 27min = 87min = 1.45h
+                "steps" to 1880
+            ),
+            mapOf(
+                "date" to "2024-12-16",
+                "duration" to 2700,  // 45min = 0.75h
+                "steps" to 2500
+            ),
+            mapOf(
+                "date" to "2024-12-17",
+                "duration" to 10800,  // 3h = 180min = 3.0h
+                "steps" to 3200
+            ),
+            mapOf(
+                "date" to "2024-12-18",
+                "duration" to 3900,  // 1h 5min = 65min = 1.08h
+                "steps" to 2800
+            ),
+            mapOf(
+                "date" to "2024-12-19",
+                "duration" to 5700,  // 1h 35min = 95min = 1.58h
+                "steps" to 4100
+            ),
+            mapOf(
+                "date" to "2024-12-20",
+                "duration" to 2100,  // 35min = 0.58h
+                "steps" to 1500
+            ),
+            mapOf(
+                "date" to "2024-12-21",
+                "duration" to 4500,  // 1h 15min = 75min = 1.25h
+                "steps" to 2900
+            )
+        ),
+        "dateRange" to listOf(
+            mapOf(
+                "startDate" to "2024-12-15",
+                "endDate" to "2024-12-21"
+            )
+        )
+    )
+
+    ActivityChart(data = sampleData)
 }
