@@ -17,12 +17,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.outlined.DirectionsBike
+import androidx.compose.material.icons.outlined.DirectionsRun
+import androidx.compose.material.icons.outlined.DirectionsWalk
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -44,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +74,63 @@ sealed class LogoutResult {
     data class Error(val message: String) : LogoutResult()
 }
 
+@Composable
+fun ActivitySelectionCard(
+    overviewData: Map<String, Any>?,
+    selectedActivity: String,
+    onActivitySelected: (String) -> Unit,
+    onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val activityData = when (selectedActivity) {
+        "walking" -> Triple(
+            "walkingAvgPulse",
+            "walkingDuration"
+        ) { onNavigate("walking") }
+
+        "running" -> Triple(
+            "runningAvgPulse",
+            "runningDuration"
+        ) { onNavigate("running") }
+
+        "cycling" -> Triple(
+            "cyclingAvgPulse",
+            "cyclingDuration"
+        ) { onNavigate("cycling") }
+
+        else -> Triple("walkingAvgPulse", "walkingDuration") { onNavigate("walking") }
+    }
+
+    overviewData?.let { data ->
+        val pulse = data[activityData.first]
+        val duration = data[activityData.second]
+
+        if (pulse != null && duration != null) {
+            UnifiedActivityCard(
+                selectedActivity = selectedActivity,
+                onActivitySelected = onActivitySelected,
+                pulse = (pulse as Number).toInt(),
+                duration = (duration as Number).toInt(),
+                modifier = modifier.clickable(onClick = activityData.third)
+            )
+        } else {
+            UnifiedActivityCard(
+                selectedActivity = selectedActivity,
+                onActivitySelected = onActivitySelected,
+                pulse = 0,
+                duration = 0,
+                modifier = modifier.clickable(onClick = activityData.third)
+            )
+        }
+    } ?: UnifiedActivityCard(
+        selectedActivity = selectedActivity,
+        onActivitySelected = onActivitySelected,
+        pulse = 0,
+        duration = 0,
+        modifier = modifier.clickable(onClick = activityData.third)
+    )
+}
+
 @SuppressLint("NewApi")
 @Composable
 fun OverviewScreen(
@@ -84,6 +147,7 @@ fun OverviewScreen(
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     val calendar = Calendar.getInstance()
     var sevenDaysData by remember { mutableStateOf<Map<String, List<Map<String, Any>>>?>(null) }
+    var selectedActivity by remember { mutableStateOf("walking") }
 
     var stepsCount by remember { mutableIntStateOf(0) }
     var lastSentStepCount by remember { mutableIntStateOf(-1) }
@@ -260,11 +324,6 @@ fun OverviewScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "Your Daily Health Statistics",
-                fontSize = 14.sp,
-                color = Color.Gray,
-            )
-            Text(
                 text = "$selectedDate",
                 fontSize = 14.sp,
                 color = Color.Gray,
@@ -275,7 +334,7 @@ fun OverviewScreen(
 
             Row(
                 modifier = Modifier
-                    .width(300.dp)
+                    .fillMaxWidth()
                     .clickable {
                         handleNavigation(onEditStepsChoice)
                     },
@@ -294,90 +353,22 @@ fun OverviewScreen(
 
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
             ActivityChart(sevenDaysData)
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Walking
-            Text(
-                text = "Walking",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-            )
-
-            Row(
-                modifier = Modifier
-                    .width(300.dp)
-                    .clickable {
-                        handleNavigation { onWalkingSessionsChoice(selectedDate) }
-                    },
-                horizontalArrangement = Arrangement.Center
-            ) {
-                overviewData?.let { data ->
-                    if (data["walkingAvgPulse"] != null && data["walkingDuration"] != null) {
-                        HealthCard(data["walkingAvgPulse"], "BPM", "Pulse")
-                        HealthCard(data["walkingDuration"], "Training", "Duration")
-                    } else {
-                        NoActivityCard(activity = "walking")
+            ActivitySelectionCard(
+                overviewData = overviewData,
+                selectedActivity = selectedActivity,
+                onActivitySelected = { newActivity ->
+                    selectedActivity = newActivity
+                },
+                onNavigate = { activity ->
+                    when (activity) {
+                        "walking" -> handleNavigation { onWalkingSessionsChoice(selectedDate) }
+                        "running" -> handleNavigation { onRunningSessionsChoice(selectedDate) }
+                        "cycling" -> handleNavigation { onCyclingSessionsChoice(selectedDate) }
                     }
-                } ?: NoActivityCard(activity = "walking")
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Running
-            Text(
-                text = "Running",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
+                }
             )
-
-            Row(
-                modifier = Modifier
-                    .width(300.dp)
-                    .clickable {
-                        handleNavigation { onRunningSessionsChoice(selectedDate) }
-                    },
-                horizontalArrangement = Arrangement.Center
-            ) {
-                overviewData?.let { data ->
-                    if (data["runningAvgPulse"] != null && data["runningDuration"] != null) {
-                        HealthCard(data["runningAvgPulse"], "BPM", "Pulse")
-                        HealthCard(data["runningDuration"], "Training", "Duration")
-                    } else {
-                        NoActivityCard(activity = "running")
-                    }
-                } ?: NoActivityCard(activity = "running")
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Cycling
-            Text(
-                text = "Cycling",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-            )
-
-            Row(
-                modifier = Modifier
-                    .width(300.dp)
-                    .clickable {
-                        handleNavigation { onCyclingSessionsChoice(selectedDate) }
-                    },
-                horizontalArrangement = Arrangement.Center
-            ) {
-                overviewData?.let { data ->
-                    if (data["cyclingAvgPulse"] != null && data["cyclingDuration"] != null) {
-                        HealthCard(data["cyclingAvgPulse"], "BPM", "Pulse")
-                        HealthCard(data["cyclingDuration"], "Training", "Duration")
-                    } else {
-                        NoActivityCard(activity = "cycling")
-                    }
-                } ?: NoActivityCard(activity = "cycling")
-            }
         }
     }
 }
@@ -776,38 +767,65 @@ private suspend fun clearUserData(context: Context) {
 }
 
 @Composable
-fun StepsProgressBar(steps: Int, stepsGoal: Int) {
-    Column(
-        modifier = Modifier
-            .width(320.dp)
-            .padding(32.dp)
-            .height(70.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Steps progress",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
+fun StepsProgressBar(
+    steps: Int,
+    stepsGoal: Int,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFCAF0F8)
         )
-        // Calculate progress as a fraction (steps / stepsGoal)
-        val progress = if (stepsGoal > 0) steps / stepsGoal.toFloat() else 0f
-
-        LinearProgressIndicator(
-            progress = progress,
-            color = colorResource(id = R.color.light_blue),
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .height(6.dp)
-                .clip(RoundedCornerShape(6.dp))
-        )
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Steps progress",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF424242)
+            )
 
-        Text(text = "$steps out of $stepsGoal steps")
+            // Calculate progress as a fraction
+            val progress = if (stepsGoal > 0) steps / stepsGoal.toFloat() else 0f
+
+            LinearProgressIndicator(
+                progress = progress,
+                color = Color(0xFF48CAE4),
+                trackColor = Color(0xFFADE8F4),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp)
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+
+            Text(
+                text = "$steps out of $stepsGoal",
+                fontSize = 16.sp,
+                color = Color(0xFF424242),
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 
 @Composable
-fun HealthCard(value: Any?, unit: String?, description: String?) {
+fun UnifiedActivityCard(
+    selectedActivity: String,
+    onActivitySelected: (String) -> Unit,
+    pulse: Int,
+    duration: Int,
+    modifier: Modifier = Modifier
+) {
     fun formatDuration(seconds: Int): String {
         if (seconds < 60) {
             return "00:00:%02d".format(seconds)
@@ -826,62 +844,136 @@ fun HealthCard(value: Any?, unit: String?, description: String?) {
     }
 
     Card(
-        modifier = Modifier
-            .width(150.dp)
-            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-            .height(100.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(32.dp),
         colors = CardDefaults.cardColors(
-            containerColor = colorResource(id = R.color.light_blue),
-            contentColor = colorResource(id = R.color.white)
+            containerColor = Color(0xFFCAF0F8)
         )
     ) {
         Column(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxSize(),
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = if (description == "Duration") formatDuration(value as Int) else value.toString(),
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = unit.toString(),
-                fontSize = 14.sp,
-                color = Color.Black
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = description.toString(),
-                fontSize = 12.sp,
-                color = Color.Black
-            )
+            // Activity Icons Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ActivityIcon(
+                    icon = Icons.Outlined.DirectionsWalk,
+                    isSelected = selectedActivity == "walking",
+                    onClick = { onActivitySelected("walking") }
+                )
+                ActivityIcon(
+                    icon = Icons.Outlined.DirectionsRun,
+                    isSelected = selectedActivity == "running",
+                    onClick = { onActivitySelected("running") }
+                )
+                ActivityIcon(
+                    icon = Icons.Outlined.DirectionsBike,
+                    isSelected = selectedActivity == "cycling",
+                    onClick = { onActivitySelected("cycling") }
+                )
+            }
+
+            // Stats Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Pulse Section
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = pulse.toString(),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "BPM",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "Pulse",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                }
+
+                // Vertical Divider
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(80.dp)
+                        .background(Color(0xFF757575))
+                )
+
+                // Duration Section
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = formatDuration(duration),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF424242)
+                        )
+                    }
+                    Text(
+                        text = "Training",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "Duration",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-fun NoActivityCard(
-    activity: String,
+private fun ActivityIcon(
+    icon: ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit
 ) {
-    Card(
+    Box(
         modifier = Modifier
-            .width(300.dp)
-            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-            .height(100.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = colorResource(id = R.color.light_blue),
-            contentColor = colorResource(id = R.color.white)
-        )
+            .size(56.dp)
+            .clip(CircleShape)
+            .background(
+                if (isSelected) Color(0xFF48CAE4)
+                else Color(0xFF424242)
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("No $activity sessions found...")
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(28.dp)
+        )
     }
 }
 
@@ -1120,4 +1212,47 @@ fun NoActivityChart() {
     )
 
     ActivityChart(data = sampleData)
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ActivityIconsPreview() {
+    MaterialTheme {
+        Surface {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                ActivityIcon(
+                    icon = Icons.Outlined.DirectionsWalk,
+                    isSelected = true,
+                    onClick = {}
+                )
+                ActivityIcon(
+                    icon = Icons.Outlined.DirectionsRun,
+                    isSelected = false,
+                    onClick = {}
+                )
+                ActivityIcon(
+                    icon = Icons.Outlined.DirectionsBike,
+                    isSelected = false,
+                    onClick = {}
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun UnifiedActivityCardPreview() {
+    Surface {
+        UnifiedActivityCard(
+            selectedActivity = "walking",
+            onActivitySelected = {},
+            pulse = 85,
+            duration = 4,
+            modifier = Modifier.padding(16.dp)
+        )
+    }
 }
