@@ -2,11 +2,11 @@ package com.mateusz.frontend
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,13 +16,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -80,7 +81,7 @@ fun WalkingSessionsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(0.20f)
-                    .padding(16.dp),
+                    .padding(top = 16.dp, start = 16.dp, end = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -113,8 +114,8 @@ fun WalkingSessionsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(0.80f)
-                    .padding(top = 32.dp, start = 16.dp, end = 16.dp, bottom = 64.dp)
+                    .weight(0.60f)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
                 Column(
@@ -139,76 +140,70 @@ fun WalkingSessionsScreen(
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-
-                                        Text(
-                                            text = "Session $walkingSessionCount",
-                                            fontSize = 24.sp,
+                                        WalkingSessionCard(
+                                            count = walkingSessionCount,
+                                            pulse = session["average_pulse"] as Int,
+                                            duration = session["duration"] as Int
                                         )
-
-                                        Row {
-                                            WalkingCard(
-                                                value = session["average_pulse"] as Int,
-                                                unit = "BPM",
-                                                description = "Pulse"
-                                            )
-                                            WalkingCard(
-                                                value = session["duration"] as Int,
-                                                unit = "Training",
-                                                description = "Duration"
-                                            )
-                                        }
                                     }
                                 }
                             }
                         }
                     } else {
-                        Card(
-                            modifier = Modifier
-                                .width(300.dp)
-                                .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-                                .height(100.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = colorResource(id = R.color.light_blue),
-                                contentColor = colorResource(id = R.color.white)
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("No walking sessions found...")
-                            }
-                        }
+                        NoWalkingSessionCard()
                     }
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.20f)
+                    .padding(16.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                val today = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+                val selectedDateStr = selectedDate?.format(DateTimeFormatter.ISO_DATE)
 
-                    val today = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-                    val selectedDateStr = selectedDate?.format(DateTimeFormatter.ISO_DATE)
-
-                    if (selectedDateStr == today) {
-                        // Add walking session Button
-                        Button(
-                            onClick = {
-                                onAddNewWalkingSessionChoice()
-                            },
+                if (selectedDateStr == today) {
+                    Card(
+                        shape = RoundedCornerShape(32.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFCAF0F8)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp)
+                    ) {
+                        Row(
                             modifier = Modifier
-                                .width(300.dp)
-                                .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-                                .height(56.dp),
-                            shape = RoundedCornerShape(25),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colorResource(id = R.color.light_blue),
-                                contentColor = colorResource(id = R.color.white)
-                            )
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "Add new walking session",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Medium
+                                text = "Start new session",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = Color(0xFF424242),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 24.sp,
+                                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
                             )
+
+                            FloatingActionButton(
+                                onClick = {
+                                    onAddNewWalkingSessionChoice()
+                                },
+                                containerColor = colorResource(id = R.color.light_blue),
+                                contentColor = colorResource(id = R.color.white)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add new walking session",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }
@@ -342,7 +337,12 @@ private fun parseWalkingSessions(response: String): List<Map<String, Any>>? {
 }
 
 @Composable
-fun WalkingCard(value: Int, unit: String, description: String) {
+fun WalkingSessionCard(
+    count: Int,
+    pulse: Int,
+    duration: Int,
+    modifier: Modifier = Modifier
+) {
     fun formatDuration(seconds: Int): String {
         if (seconds < 60) {
             return "00:00:%02d".format(seconds)
@@ -361,37 +361,201 @@ fun WalkingCard(value: Int, unit: String, description: String) {
     }
 
     Card(
-        modifier = Modifier
-            .width(150.dp)
-            .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-            .height(100.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(32.dp),
         colors = CardDefaults.cardColors(
-            containerColor = colorResource(id = R.color.light_blue),
-            contentColor = colorResource(id = R.color.white)
+            containerColor = Color(0xFFCAF0F8)
         )
     ) {
         Column(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxSize(),
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = if (description == "Duration") formatDuration(value) else value.toString(),
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = unit,
-                fontSize = 14.sp,
-                color = Color.Black
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = description,
-                fontSize = 12.sp,
-                color = Color.Black
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Session $count",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color(0xFF424242),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Pulse Section
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = pulse.toString(),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "BPM",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "Pulse",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                }
+
+                // Vertical Divider
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(80.dp)
+                        .background(Color(0xFF757575))
+                )
+
+                // Duration Section
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = formatDuration(duration),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF424242)
+                        )
+                    }
+                    Text(
+                        text = "Training",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "Duration",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NoWalkingSessionCard(
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFCAF0F8)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "No sessions found",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color(0xFF424242),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Pulse Section
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "-",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "BPM",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "Pulse",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                }
+
+                // Vertical Divider
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(80.dp)
+                        .background(Color(0xFF757575))
+                )
+
+                // Duration Section
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "-",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF424242)
+                        )
+                    }
+                    Text(
+                        text = "Training",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                    Text(
+                        text = "Duration",
+                        fontSize = 12.sp,
+                        color = Color(0xFF424242)
+                    )
+                }
+            }
         }
     }
 }
