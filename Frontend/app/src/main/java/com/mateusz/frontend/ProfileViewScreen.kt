@@ -11,15 +11,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Height
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,12 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -60,22 +63,15 @@ fun ProfileViewScreen(
 
     val context = LocalContext.current
 
-    // Fetch user data when the screen is first composed
     LaunchedEffect(Unit) {
         val userData = fetchUserData(context)
         userData?.let { user ->
-            name = user["name"] as? String
-            email = user["email"] as? String
-            birthDate = user["birth_date"] as? String
-            gender = user["sex"] as? String
-            weight = (user["weight"] as? Double)?.toFloat()
-            height = user["height"] as? Int
-        } ?: run {
-            Toast.makeText(
-                context,
-                "Failed to fetch user data",
-                Toast.LENGTH_SHORT
-            ).show()
+            name = user["name"]?.toString()
+            email = user["email"]?.toString()
+            birthDate = user["birth_date"]?.toString()
+            gender = user["sex"]?.toString()
+            weight = user["weight"]?.toString()?.toFloatOrNull()
+            height = user["height"]?.toString()?.toIntOrNull()
         }
     }
 
@@ -90,146 +86,171 @@ fun ProfileViewScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = { onGoBackChoice() },
-                    modifier = Modifier
-                        .weight(0.1f)
-                ) {
+                IconButton(onClick = { onGoBackChoice() }) {
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Back"
                     )
                 }
-
                 Text(
-                    text = "Profile Overview",
-                    fontFamily = FontFamily.SansSerif,
-                    fontStyle = FontStyle.Normal,
-                    fontWeight = FontWeight.Bold,
+                    text = "Profile",
                     style = MaterialTheme.typography.headlineMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .weight(0.8f)
+                    fontWeight = FontWeight.Bold
                 )
-
-                IconButton(
-                    onClick = { onEditProfileChoice() },
-                    modifier = Modifier
-                        .weight(0.1f)
-                ) {
+                IconButton(onClick = { onEditProfileChoice() }) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Back"
+                        contentDescription = "Edit"
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // name TextField
-            OutlinedTextField(
-                value = name ?: "",
-                onValueChange = { /* read only */ },
-                label = { Text("Name") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = colorResource(id = R.color.light_blue),
-                    disabledTextColor = Color.Black,
-                    disabledLabelColor = Color.Black
-                )
-            )
+            // Profile Info Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFCAF0F8)
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Name Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Name",
+                            tint = Color(0xFF424242)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = name ?: "",
+                            color = Color(0xFF424242),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                    Divider(color = Color(0xFF424242), thickness = 1.dp)
 
-            // email TextField
-            OutlinedTextField(
-                value = email ?: "",
-                onValueChange = { /* read only */ },
-                label = { Text("Email") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = colorResource(id = R.color.light_blue),
-                    disabledTextColor = Color.Black,
-                    disabledLabelColor = Color.Black
-                )
-            )
+                    // Email Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Email,
+                            contentDescription = "Email",
+                            tint = Color(0xFF424242)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = email ?: "",
+                            color = Color(0xFF424242),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                    Divider(color = Color(0xFF424242), thickness = 1.dp)
 
-            // Birth date TextField
-            OutlinedTextField(
-                value = birthDate ?: "",
-                onValueChange = { /* read only */ },
-                label = { Text("Birth Date") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = colorResource(id = R.color.light_blue),
-                    disabledTextColor = Color.Black,
-                    disabledLabelColor = Color.Black
-                )
-            )
+                    // Birth Date Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = "Birth Date",
+                            tint = Color(0xFF424242)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = birthDate ?: "",
+                            color = Color(0xFF424242),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                    Divider(color = Color(0xFF424242), thickness = 1.dp)
 
-            // Gender TextField
-            OutlinedTextField(
-                value = gender ?: "",
-                onValueChange = { /* read only */ },
-                label = { Text("Gender") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = colorResource(id = R.color.light_blue),
-                    disabledTextColor = Color.Black,
-                    disabledLabelColor = Color.Black
-                )
-            )
+                    // Gender Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Face,
+                            contentDescription = "Gender",
+                            tint = Color(0xFF424242)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = gender ?: "",
+                            color = Color(0xFF424242),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                    Divider(color = Color(0xFF424242), thickness = 1.dp)
 
-            // Weight TextField
-            OutlinedTextField(
-                value = weight?.toString() ?: "",
-                onValueChange = { /* read only */ },
-                label = { Text("Weight") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = colorResource(id = R.color.light_blue),
-                    disabledTextColor = Color.Black,
-                    disabledLabelColor = Color.Black
-                )
-            )
+                    // Height Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Height,
+                            contentDescription = "Height",
+                            tint = Color(0xFF424242)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = height?.let { "$it cm" } ?: "-",
+                            color = Color(0xFF424242),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                    Divider(color = Color(0xFF424242), thickness = 1.dp)
 
-            // Height TextField
-            OutlinedTextField(
-                value = height?.toString() ?: "",
-                onValueChange = { /* read only */ },
-                label = { Text("Height") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = colorResource(id = R.color.light_blue),
-                    disabledTextColor = Color.Black,
-                    disabledLabelColor = Color.Black
-                )
-            )
+                    // Weight Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FitnessCenter,
+                            contentDescription = "Weight",
+                            tint = Color(0xFF424242)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = when {
+                                weight == null || weight!!.isNaN() -> "-"
+                                else -> "$weight kg"
+                            },
+                            color = Color(0xFF424242),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
         }
     }
 }
