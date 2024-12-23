@@ -5,8 +5,9 @@ import android.content.Context
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,18 +15,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,14 +47,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -83,6 +85,7 @@ fun NewRunningSessionScreen(
     var lastHeartRateUpdate by remember { mutableLongStateOf(0L) }
     var isReceivingData by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
+    var showConfirmationDialog by remember { mutableStateOf(false) }
 
     // First, get the BluetoothManager
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -108,7 +111,7 @@ fun NewRunningSessionScreen(
                 lastHeartRateUpdate = System.currentTimeMillis()
                 isReceivingData = true
             },
-            onStepCountReceived = {}
+            onStepCountReceived = { }
         )
 
         onDispose {
@@ -129,204 +132,344 @@ fun NewRunningSessionScreen(
         color = Color.White
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 48.dp, end = 48.dp, bottom = 48.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "New running session",
-                fontFamily = FontFamily.SansSerif,
-                fontStyle = FontStyle.Normal,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Average pulse TextField with Gadgetbridge button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
+                contentAlignment = Alignment.Center
             ) {
-                OutlinedTextField(
-                    value = "$averagePulse BPM",
-                    onValueChange = { }, // Empty because we don't want manual changes
-                    label = { Text("Average pulse") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colorResource(id = R.color.black),
-                        focusedLabelColor = colorResource(id = R.color.black),
-                        disabledTextColor = Color.Black,
-                        disabledBorderColor = colorResource(id = R.color.black),
-                        disabledLabelColor = colorResource(id = R.color.black),
-                    ),
-                    enabled = false,
-                )
-
-                IconButton(
-                    onClick = {
-                        if (!isBluetoothEnabled) {
-                            Toast.makeText(
-                                context,
-                                "Please enable Bluetooth in phone settings",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        painter = painterResource(
-                            id = if (isReceivingData) R.drawable.ic_watch_receiving
-                            else if (isBluetoothEnabled) R.drawable.ic_watch_connected
-                            else R.drawable.ic_watch_disconnected
-                        ),
-                        contentDescription = if (isReceivingData) "Stop monitoring"
-                        else "Enable Bluetooth",
-                        tint = if (isReceivingData) Color.Green
-                        else if (isBluetoothEnabled) colorResource(id = R.color.light_blue)
-                        else Color.Gray
-                    )
-                }
-            }
-
-            if (!isBluetoothEnabled) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Enable Bluetooth to connect with external device",
-                    color = Color.Gray,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-
-            if (isBluetoothEnabled) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Data read status: ${heartRateReadings.size} heart rate reading(s)",
-                    color = Color.Gray,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Function to format duration
-                fun formatDuration(seconds: Int): String {
-                    if (seconds < 60) {
-                        return "00:00:%02d".format(seconds)
-                    }
-
-                    val hours = seconds / 3600
-                    val remainingSecondsAfterHours = seconds % 3600
-                    val minutes = remainingSecondsAfterHours / 60
-                    val remainingSeconds = remainingSecondsAfterHours % 60
-
-                    return if (hours > 0) {
-                        "%02d:%02d:%02d".format(hours, minutes, remainingSeconds)
-                    } else {
-                        "%02d:%02d:%02d".format(0, minutes, remainingSeconds)
-                    }
-                }
-
-                // Duration TextField
-                OutlinedTextField(
-                    value = formatDuration(duration),
-                    onValueChange = { },
-                    label = { Text("Duration") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colorResource(id = R.color.black),
-                        focusedLabelColor = colorResource(id = R.color.black),
-                        disabledTextColor = Color.Black,
-                        disabledBorderColor = colorResource(id = R.color.black),
-                        disabledLabelColor = colorResource(id = R.color.black),
-                    ),
-                    enabled = false,
-                )
-
-                IconButton(
-                    onClick = { duration = 0 }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reset timer"
-                    )
-                }
-            }
-
-            // Save Button
-            Button(
-                onClick = {
-                    isProcessing = true
-                    CoroutineScope(Dispatchers.IO).launch {
-                        val result = makeAddNewRunningSessionRequest(
-                            duration,
-                            averagePulse,
-                            password,
-                            context
+                    IconButton(onClick = {
+                        showConfirmationDialog = true
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back"
                         )
-                        withContext(Dispatchers.Main) {
-                            when (result) {
-                                is RunningSessionResult.Success -> {
-                                    handleNavigation(selectedDate, onSaveChoice)
-                                }
+                    }
 
-                                is RunningSessionResult.Error -> {
-                                    isProcessing = false
-                                    Toast.makeText(context, result.message, Toast.LENGTH_LONG)
-                                        .show()
+                    if (showConfirmationDialog) {
+                        Dialog(
+                            onDismissRequest = { showConfirmationDialog = false }
+                        ) {
+                            Card(
+                                shape = RoundedCornerShape(32.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFFCAF0F8)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "Are you sure you want to give up?",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        textAlign = TextAlign.Center,
+                                        color = Color(0xFF424242),
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    Spacer(modifier = Modifier.height(24.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceEvenly
+                                    ) {
+                                        Button(
+                                            onClick = { showConfirmationDialog = false },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = colorResource(id = R.color.light_blue)
+                                            ),
+                                            shape = RoundedCornerShape(16.dp)
+                                        ) {
+                                            Text("No")
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                showConfirmationDialog = false
+                                                handleNavigation(selectedDate, onCancelChoice)
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = colorResource(id = R.color.light_blue)
+                                            ),
+                                            shape = RoundedCornerShape(16.dp)
+                                        ) {
+                                            Text("Yes")
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                },
-                enabled = !isProcessing,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 42.dp, start = 32.dp, end = 32.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colorResource(id = R.color.light_blue),
-                    contentColor = colorResource(id = R.color.white)
-                )
-            ) {
-                Text(
-                    if (isProcessing) "Processing..." else "Save",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium
-                )
+
+                    Text(
+                        text = "New Running Session",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = {
+                        isProcessing = true
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val result = makeAddNewRunningSessionRequest(duration, averagePulse, password, context)
+                            withContext(Dispatchers.Main) {
+                                when (result) {
+                                    is RunningSessionResult.Success -> {
+                                        handleNavigation(selectedDate, onSaveChoice)
+                                    }
+                                    is RunningSessionResult.Error -> {
+                                        isProcessing = false
+                                        Toast.makeText(
+                                            context,
+                                            result.message,
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
+                            }
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = "Save"
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Cancel Button
-            OutlinedButton(
-                onClick = { handleNavigation(selectedDate, onCancelChoice) },
-                enabled = !isProcessing,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 32.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(50),
-                border = BorderStroke(2.dp, color = colorResource(id = R.color.light_blue))
+                    .padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
             ) {
-                Text(
-                    "Cancel",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colorResource(id = R.color.light_blue)
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    fun formatDuration(seconds: Int): String {
+                        if (seconds < 60) {
+                            return "00:00:%02d".format(seconds)
+                        }
+
+                        val hours = seconds / 3600
+                        val remainingSecondsAfterHours = seconds % 3600
+                        val minutes = remainingSecondsAfterHours / 60
+                        val remainingSeconds = remainingSecondsAfterHours % 60
+
+                        return if (hours > 0) {
+                            "%02d:%02d:%02d".format(hours, minutes, remainingSeconds)
+                        } else {
+                            "%02d:%02d:%02d".format(0, minutes, remainingSeconds)
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        shape = RoundedCornerShape(32.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFCAF0F8)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Pulse Section
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = averagePulse.toString(),
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF424242)
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "BPM",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF424242)
+                                    )
+                                    Text(
+                                        text = "Pulse",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF424242)
+                                    )
+                                }
+
+                                // Vertical Divider
+                                Box(
+                                    modifier = Modifier
+                                        .width(1.dp)
+                                        .height(80.dp)
+                                        .background(Color(0xFF757575))
+                                )
+
+                                // Duration Section
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = formatDuration(duration),
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF424242)
+                                        )
+                                    }
+                                    Text(
+                                        text = "Training",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF424242)
+                                    )
+                                    Text(
+                                        text = "Duration",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF424242)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 8.dp, bottom = 16.dp)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFCAF0F8)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Bluetooth Info",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = Color(0xFF424242),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp,
+                            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                        )
+
+                        FloatingActionButton(
+                            onClick = {
+                                if (isReceivingData) {
+                                    Toast.makeText(context, "Data read status: \n${heartRateReadings.size} heart rate reading(s)", Toast.LENGTH_LONG).show()
+                                } else if (isBluetoothEnabled) {
+                                    Toast.makeText(context, "Bluetooth connection enabled.\nWaiting for device to pair...", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Bluetooth turned off.\nPlease enable it in phone settings", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            containerColor = colorResource(id = R.color.light_blue),
+                            contentColor = colorResource(id = R.color.white)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bluetooth,
+                                contentDescription = if (isReceivingData) "Stop monitoring"
+                                else "Enable Bluetooth",
+                                tint = if (isReceivingData) Color.Green
+                                else if (isBluetoothEnabled) Color.Yellow
+                                else Color.Red
+                            )
+                        }
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFCAF0F8)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Reset Timer",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = Color(0xFF424242),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp,
+                            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                        )
+
+                        FloatingActionButton(
+                            onClick = {
+                                duration = 0
+                            },
+                            containerColor = colorResource(id = R.color.light_blue),
+                            contentColor = colorResource(id = R.color.white)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Reset timer",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
             }
         }
     }

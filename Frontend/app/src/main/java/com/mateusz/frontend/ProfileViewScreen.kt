@@ -19,8 +19,8 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Height
+import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -235,7 +235,7 @@ fun ProfileViewScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.FitnessCenter,
+                            imageVector = Icons.Default.MonitorWeight,
                             contentDescription = "Weight",
                             tint = Color(0xFF424242)
                         )
