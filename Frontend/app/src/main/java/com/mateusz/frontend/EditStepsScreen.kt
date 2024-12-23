@@ -2,20 +2,26 @@ package com.mateusz.frontend
 
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -30,13 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,7 +58,6 @@ sealed class StepsUpdateResult {
 fun EditStepsScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
     var goal by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
-    var loginResult by remember { mutableStateOf("") }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -68,35 +70,23 @@ fun EditStepsScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "Edit steps",
-                fontFamily = FontFamily.SansSerif,
-                fontStyle = FontStyle.Normal,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Goal TextField
-            OutlinedTextField(
-                value = goal?.toString() ?: "",
-                onValueChange = {
-                    goal = it.toIntOrNull()
-                },
-                label = { Text("Goal (e.g. 10000)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorResource(id = R.color.light_blue),
-                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { onCancelChoice() }) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+                Text(
+                    text = "Edit Steps Goal",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
                 )
-            )
-
-            // Save Button
-            Button(
-                onClick = {
+                IconButton(onClick = {
                     CoroutineScope(Dispatchers.IO).launch {
                         val result = makeEditStepsRequest(goal, context)
                         withContext(Dispatchers.Main) {
@@ -114,47 +104,59 @@ fun EditStepsScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
                             }
                         }
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 42.dp, start = 32.dp, end = 32.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colorResource(id = R.color.light_blue),
-                    contentColor = colorResource(id = R.color.white)
-                )
-            ) {
-                Text(
-                    "Save",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Save,
+                        contentDescription = "Save"
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Cancel Button
-            OutlinedButton(
-                onClick = {
-                    onCancelChoice()
-                },
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 32.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(50),
-                border = BorderStroke(
-                    2.dp,
-                    color = colorResource(id = R.color.light_blue)
-                )
+                    .padding(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFCAF0F8)
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text(
-                    "Cancel",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colorResource(id = R.color.light_blue)
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Goal Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DirectionsWalk,
+                            contentDescription = "Height",
+                            tint = Color(0xFF424242)
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        OutlinedTextField(
+                            value = goal?.toString() ?: "",
+                            onValueChange = {
+                                goal = it.toIntOrNull()
+                            },
+                            label = { Text("Goal (e.g. 10000)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = colorResource(id = R.color.light_blue),
+                                focusedLabelColor = colorResource(id = R.color.light_blue),
+                            )
+                        )
+                    }
+                }
             }
         }
     }
