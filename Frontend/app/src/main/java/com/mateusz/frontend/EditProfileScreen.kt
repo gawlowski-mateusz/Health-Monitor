@@ -5,15 +5,30 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Height
+import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.Password
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -72,98 +87,23 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "Edit Profile",
-                fontFamily = FontFamily.SansSerif,
-                fontStyle = FontStyle.Normal,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-
-            // Height TextField
-            OutlinedTextField(
-                value = heightText,
-                onValueChange = {
-                    heightText = it
-                    heightError = when {
-                        it.isNotEmpty() && it.toIntOrNull() == null -> "Please enter a valid number"
-                        it.isNotEmpty() && it.toIntOrNull() != null && it.toInt() <= 0 -> "Height must be greater than 0"
-                        else -> null
-                    }
-                },
-                label = { Text("Height (cm)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorResource(id = R.color.light_blue),
-                    focusedLabelColor = colorResource(id = R.color.light_blue),
-                    errorBorderColor = Color.Red,
-                    errorLabelColor = Color.Red
-                ),
-                isError = heightError != null,
-                supportingText = {
-                    heightError?.let {
-                        Text(
-                            text = it,
-                            color = Color.Red
-                        )
-                    }
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { onCancelChoice() }) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back"
+                    )
                 }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Weight TextField
-            OutlinedTextField(
-                value = weightText,
-                onValueChange = {
-                    weightText = it
-                    weightError = when {
-                        it.isNotEmpty() && it.toFloatOrNull() == null -> "Please enter a valid number"
-                        it.isNotEmpty() && it.toFloatOrNull() != null && it.toFloat() <= 0 -> "Weight must be greater than 0"
-                        else -> null
-                    }
-                },
-                label = { Text("Weight (kg)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorResource(id = R.color.light_blue),
-                    focusedLabelColor = colorResource(id = R.color.light_blue),
-                    errorBorderColor = Color.Red,
-                    errorLabelColor = Color.Red
-                ),
-                isError = weightError != null,
-                supportingText = {
-                    weightError?.let {
-                        Text(
-                            text = it,
-                            color = Color.Red
-                        )
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Password TextField
-            OutlinedTextField(
-                value = passwordText,
-                onValueChange = { passwordText = it },
-                label = { Text("Password") },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorResource(id = R.color.light_blue),
-                    focusedLabelColor = colorResource(id = R.color.light_blue),
+                Text(
+                    text = "Edit Profile",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
                 )
-            )
-
-            // Save Button
-            Button(
-                onClick = {
+                IconButton(onClick = {
                     val height = heightText.toIntOrNull()
                     val weight = weightText.toFloatOrNull()
                     val password = passwordText.takeIf { it.isNotBlank() }
@@ -172,12 +112,12 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
                         weightText.isNotEmpty() && weight == null ||
                         heightError != null || weightError != null) {
                         Toast.makeText(context, "Please correct the errors before saving", Toast.LENGTH_LONG).show()
-                        return@Button
+                        return@IconButton
                     }
 
                     if (heightText.isEmpty() && weightText.isEmpty() && passwordText.isEmpty()) {
                         Toast.makeText(context, "No changes to update", Toast.LENGTH_LONG).show()
-                        return@Button
+                        return@IconButton
                     }
 
                     CoroutineScope(Dispatchers.IO).launch {
@@ -194,45 +134,150 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
                             }
                         }
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 42.dp, start = 32.dp, end = 32.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colorResource(id = R.color.light_blue),
-                    contentColor = colorResource(id = R.color.white)
-                )
-            ) {
-                Text(
-                    "Save",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Save,
+                        contentDescription = "Save"
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Cancel Button
-            OutlinedButton(
-                onClick = onCancelChoice,
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 32.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(50),
-                border = BorderStroke(
-                    2.dp,
-                    color = colorResource(id = R.color.light_blue)
-                )
+                    .padding(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFCAF0F8)
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text(
-                    "Cancel",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colorResource(id = R.color.light_blue)
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Height Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Height,
+                            contentDescription = "Height",
+                            tint = Color(0xFF424242)
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        OutlinedTextField(
+                            value = heightText,
+                            onValueChange = {
+                                heightText = it
+                                heightError = when {
+                                    it.isNotEmpty() && it.toIntOrNull() == null -> "Please enter a valid number"
+                                    it.isNotEmpty() && it.toIntOrNull() != null && it.toInt() <= 0 -> "Height must be greater than 0"
+                                    else -> null
+                                }
+                            },
+                            label = { Text("Height (cm)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = colorResource(id = R.color.light_blue),
+                                focusedLabelColor = colorResource(id = R.color.light_blue),
+                                errorBorderColor = Color.Red,
+                                errorLabelColor = Color.Red
+                            ),
+                            isError = heightError != null,
+                            supportingText = {
+                                heightError?.let {
+                                    Text(
+                                        text = it,
+                                        color = Color.Red
+                                    )
+                                }
+                            }
+                        )
+                    }
+
+                    Divider(color = Color(0xFF424242), thickness = 1.dp)
+
+                    // Weight Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MonitorWeight,
+                            contentDescription = "Weight",
+                            tint = Color(0xFF424242)
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        OutlinedTextField(
+                            value = weightText,
+                            onValueChange = {
+                                weightText = it
+                                weightError = when {
+                                    it.isNotEmpty() && it.toFloatOrNull() == null -> "Please enter a valid number"
+                                    it.isNotEmpty() && it.toFloatOrNull() != null && it.toFloat() <= 0 -> "Weight must be greater than 0"
+                                    else -> null
+                                }
+                            },
+                            label = { Text("Weight (kg)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = colorResource(id = R.color.light_blue),
+                                focusedLabelColor = colorResource(id = R.color.light_blue),
+                                errorBorderColor = Color.Red,
+                                errorLabelColor = Color.Red
+                            ),
+                            isError = weightError != null,
+                            supportingText = {
+                                weightError?.let {
+                                    Text(
+                                        text = it,
+                                        color = Color.Red
+                                    )
+                                }
+                            }
+                        )
+                    }
+
+                    Divider(color = Color(0xFF424242), thickness = 1.dp)
+
+                    // Password Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Password,
+                            contentDescription = "Password",
+                            tint = Color(0xFF424242)
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        OutlinedTextField(
+                            value = passwordText,
+                            onValueChange = { passwordText = it },
+                            label = { Text("Password") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = colorResource(id = R.color.light_blue),
+                                focusedLabelColor = colorResource(id = R.color.light_blue),
+                            )
+                        )
+                    }
+                }
             }
         }
     }
