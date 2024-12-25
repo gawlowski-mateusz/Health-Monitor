@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun HomeScreen(onLoginPanelChoice: () -> Unit, onSignupPanelChoice: () -> Unit) {
+fun HomeScreen(onLoginPanelChoice: () -> Unit, onRegisterPanelChoice: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -78,7 +78,7 @@ fun HomeScreen(onLoginPanelChoice: () -> Unit, onSignupPanelChoice: () -> Unit) 
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedButton(
-            onClick = { onSignupPanelChoice() },
+            onClick = { onRegisterPanelChoice() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp)
@@ -99,5 +99,5 @@ fun HomeScreen(onLoginPanelChoice: () -> Unit, onSignupPanelChoice: () -> Unit) 
 @Preview(showBackground = true)
 @Composable
 fun PreviewHomeScreen() {
-    HomeScreen(onSignupPanelChoice = { /*TODO*/ }, onLoginPanelChoice = {})
+    HomeScreen(onRegisterPanelChoice = { /*TODO*/ }, onLoginPanelChoice = {})
 }

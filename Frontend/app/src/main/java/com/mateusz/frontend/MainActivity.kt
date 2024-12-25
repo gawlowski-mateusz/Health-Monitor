@@ -116,9 +116,9 @@ fun MyApp() {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = "home") {
-        composable("signup") {
-            SignUpScreen(
-                onSignUpSuccess = { navController.navigate("login") },
+        composable("register") {
+            RegisterScreen(
+                onRegisterSuccess = { navController.navigate("login") },
                 onNavigateToHomeScreen = { navController.navigate("home") }
             )
         }
@@ -133,7 +133,7 @@ fun MyApp() {
         composable("home") {
             HomeScreen(
                 onLoginPanelChoice = { navController.navigate("login") },
-                onSignupPanelChoice = { navController.navigate("signup") }
+                onRegisterPanelChoice = { navController.navigate("register") }
             )
         }
 
