@@ -1,6 +1,25 @@
 version: '3.8'
 
 services:
+  backend:
+    build: .
+    ports:
+      - "443:443"
+    volumes:
+      - .:/app
+      - ./cert.pem:/app/cert.pem:ro
+      - ./key.pem:/app/key.pem:ro
+    environment:
+      - FLASK_APP=app
+      - FLASK_DEBUG=True
+      - FLASK_RUN_HOST=0.0.0.0
+      - FLASK_RUN_PORT=443
+      - FLASK_RUN_CERT=/app/cert.pem
+      - FLASK_RUN_KEY=/app/key.pem
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/postgres
+    depends_on:
+      - db
+
   db:
     image: postgres:latest
     container_name: db-1

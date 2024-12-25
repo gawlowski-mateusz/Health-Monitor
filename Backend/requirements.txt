@@ -7,3 +7,4 @@ db~=0.1.1
 marshmallow~=3.22.0
 flask-jwt-extended
 passlib
+pyOpenSSL
