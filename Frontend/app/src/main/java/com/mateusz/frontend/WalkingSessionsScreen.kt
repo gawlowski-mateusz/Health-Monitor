@@ -50,6 +50,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.security.KeyStore
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.HostnameVerifier
 
 @Composable
 fun WalkingSessionsScreen(
@@ -209,130 +216,6 @@ fun WalkingSessionsScreen(
                 }
             }
         }
-    }
-}
-
-
-private suspend fun fetchWalkingSessions(
-    context: Context,
-    selectedDate: String? = null
-): List<Map<String, Any>>? {
-    return withContext(Dispatchers.IO) {
-        val dateStr = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-        val url = URL("${NetworkConfig.getBaseUrl()}/walking/$dateStr")
-
-        val connection = url.openConnection() as HttpURLConnection
-
-        try {
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("Content-Type", "application/json")
-
-            // Retrieve the JWT token from SharedPreferences
-            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: run {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "Please login to view walking sessions",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                    return@withContext null
-                }
-
-            // Add the JWT token to the Authorization header
-            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
-
-            when (val responseCode = connection.responseCode) {
-                HttpURLConnection.HTTP_OK -> {
-                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-                    parseWalkingSessions(responseText)
-                }
-                HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "Session expired. Please login again",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                    null
-                }
-                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "No walking sessions found for $dateStr",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    null
-                }
-                else -> {
-                    // Try to get error message from response
-                    val errorStream = connection.errorStream
-                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
-                    val errorMessage = errorResponse?.let {
-                        try {
-                            val jsonError = JSONObject(it)
-                            jsonError.getString("message")
-                        } catch (e: Exception) {
-                            "Failed to fetch walking sessions: $responseCode"
-                        }
-                    } ?: "Failed to fetch walking sessions: $responseCode"
-
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
-                    }
-                    null
-                }
-            }
-        } catch (e: Exception) {
-            val errorMessage = when (e) {
-                is java.net.ConnectException -> "Could not connect to server"
-                is java.net.SocketTimeoutException -> "Connection timed out"
-                is java.net.UnknownHostException -> "No internet connection"
-                else -> "Error fetching walking sessions: ${e.localizedMessage}"
-            }
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
-            }
-            e.printStackTrace()
-            null
-        } finally {
-            connection.disconnect()
-        }
-    }
-}
-
-private fun parseWalkingSessions(response: String): List<Map<String, Any>>? {
-    return try {
-        val walkingSessions = mutableListOf<Map<String, Any>>()
-        val jsonArray = JSONArray(response)
-
-        for (i in 0 until jsonArray.length()) {
-            val jsonObject = jsonArray.getJSONObject(i)
-            try {
-                val session = mapOf(
-                    "average_pulse" to jsonObject.getInt("average_pulse"),
-                    "date" to jsonObject.getString("date"),
-                    "duration" to jsonObject.getInt("duration"),
-                    "training_id" to jsonObject.getJSONObject("training").getInt("training_id"),
-                    "walking_id" to jsonObject.getInt("walking_id")
-                )
-                walkingSessions.add(session)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                // Continue with next session if one fails to parse
-                continue
-            }
-        }
-
-        walkingSessions.takeIf { it.isNotEmpty() }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
     }
 }
 
@@ -557,6 +440,156 @@ fun NoWalkingSessionCard(
                 }
             }
         }
+    }
+}
+
+private suspend fun fetchWalkingSessions(
+    context: Context,
+    selectedDate: String? = null
+): List<Map<String, Any>>? {
+    return withContext(Dispatchers.IO) {
+        val dateStr = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+        val url = URL("${NetworkConfig.getBaseUrl()}/walking/$dateStr")
+
+        val connection = createHttpsConnection(url, context)
+
+        try {
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("Content-Type", "application/json")
+
+            // Retrieve the JWT token from SharedPreferences
+            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            val jwtToken = sharedPreferences.getString("access_token", null)
+                ?: run {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Please login to view walking sessions",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@withContext null
+                }
+
+            // Add the JWT token to the Authorization header
+            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+
+            when (val responseCode = connection.responseCode) {
+                HttpURLConnection.HTTP_OK -> {
+                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                    parseWalkingSessions(responseText)
+                }
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Session expired. Please login again",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    null
+                }
+                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "No walking sessions found for $dateStr",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    null
+                }
+                else -> {
+                    // Try to get error message from response
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    val errorMessage = errorResponse?.let {
+                        try {
+                            val jsonError = JSONObject(it)
+                            jsonError.getString("message")
+                        } catch (e: Exception) {
+                            "Failed to fetch walking sessions: $responseCode"
+                        }
+                    } ?: "Failed to fetch walking sessions: $responseCode"
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
+                else -> "Error fetching walking sessions: ${e.localizedMessage}"
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            }
+            e.printStackTrace()
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+}
+
+private fun parseWalkingSessions(response: String): List<Map<String, Any>>? {
+    return try {
+        val walkingSessions = mutableListOf<Map<String, Any>>()
+        val jsonArray = JSONArray(response)
+
+        for (i in 0 until jsonArray.length()) {
+            val jsonObject = jsonArray.getJSONObject(i)
+            try {
+                val session = mapOf(
+                    "average_pulse" to jsonObject.getInt("average_pulse"),
+                    "date" to jsonObject.getString("date"),
+                    "duration" to jsonObject.getInt("duration"),
+                    "training_id" to jsonObject.getJSONObject("training").getInt("training_id"),
+                    "walking_id" to jsonObject.getInt("walking_id")
+                )
+                walkingSessions.add(session)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Continue with next session if one fails to parse
+                continue
+            }
+        }
+
+        walkingSessions.takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
+// Helper function to create SSL context
+private fun createSSLContext(context: Context): SSLContext {
+    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+    keyStore.load(null, null)
+
+    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
+        val certificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate = certificateFactory.generateCertificate(certInputStream)
+        keyStore.setCertificateEntry("my_cert", certificate)
+    }
+
+    trustManagerFactory.init(keyStore)
+    val sslContext = SSLContext.getInstance("TLS")
+    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+    return sslContext
+}
+
+// Helper function to create HTTPS connection
+private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
+    return (url.openConnection() as HttpsURLConnection).apply {
+        sslSocketFactory = createSSLContext(context).socketFactory
+        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

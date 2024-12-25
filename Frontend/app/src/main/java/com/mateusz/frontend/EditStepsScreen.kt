@@ -48,6 +48,13 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyStore
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.HostnameVerifier
 
 sealed class StepsUpdateResult {
     data object Success : StepsUpdateResult()
@@ -169,7 +176,7 @@ private suspend fun makeEditStepsRequest(
     val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
 
     val connection = withContext(Dispatchers.IO) {
-        url.openConnection() as HttpURLConnection
+        createHttpsConnection(url, context)
     }
 
     return try {
@@ -241,11 +248,38 @@ private suspend fun makeEditStepsRequest(
             is java.net.ConnectException -> "Could not connect to server"
             is java.net.SocketTimeoutException -> "Connection timed out"
             is java.net.UnknownHostException -> "No internet connection"
+            is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
             else -> "Error updating steps goal: ${e.localizedMessage}"
         }
         StepsUpdateResult.Error(errorMessage)
     } finally {
         connection.disconnect()
+    }
+}
+
+// Helper function to create SSL context
+private fun createSSLContext(context: Context): SSLContext {
+    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+    keyStore.load(null, null)
+
+    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
+        val certificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate = certificateFactory.generateCertificate(certInputStream)
+        keyStore.setCertificateEntry("my_cert", certificate)
+    }
+
+    trustManagerFactory.init(keyStore)
+    val sslContext = SSLContext.getInstance("TLS")
+    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+    return sslContext
+}
+
+// Helper function to create HTTPS connection
+private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
+    return (url.openConnection() as HttpsURLConnection).apply {
+        sslSocketFactory = createSSLContext(context).socketFactory
+        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

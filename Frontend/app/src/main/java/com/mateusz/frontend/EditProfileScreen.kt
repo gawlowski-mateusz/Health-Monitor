@@ -2,7 +2,6 @@ package com.mateusz.frontend
 
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,21 +15,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Height
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -45,14 +39,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -61,6 +52,13 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyStore
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.HostnameVerifier
 
 sealed class ProfileUpdateResult {
     data object Success : ProfileUpdateResult()
@@ -292,7 +290,7 @@ private suspend fun makeEditProfileRequest(
     val url = URL("${NetworkConfig.getBaseUrl()}/update-profile")
 
     val connection = withContext(Dispatchers.IO) {
-        url.openConnection() as HttpURLConnection
+        createHttpsConnection(url, context)
     }
 
     return try {
@@ -378,11 +376,38 @@ private suspend fun makeEditProfileRequest(
             is java.net.ConnectException -> "Could not connect to server"
             is java.net.SocketTimeoutException -> "Connection timed out"
             is java.net.UnknownHostException -> "No internet connection"
+            is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
             else -> "Error updating profile: ${e.localizedMessage}"
         }
         ProfileUpdateResult.Error(errorMessage)
     } finally {
         connection.disconnect()
+    }
+}
+
+// Helper function to create SSL context
+private fun createSSLContext(context: Context): SSLContext {
+    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+    keyStore.load(null, null)
+
+    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
+        val certificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate = certificateFactory.generateCertificate(certInputStream)
+        keyStore.setCertificateEntry("my_cert", certificate)
+    }
+
+    trustManagerFactory.init(keyStore)
+    val sslContext = SSLContext.getInstance("TLS")
+    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+    return sslContext
+}
+
+// Helper function to create HTTPS connection
+private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
+    return (url.openConnection() as HttpsURLConnection).apply {
+        sslSocketFactory = createSSLContext(context).socketFactory
+        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

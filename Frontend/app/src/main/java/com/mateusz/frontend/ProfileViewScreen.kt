@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
@@ -48,6 +49,13 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyStore
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.HostnameVerifier
 
 @Composable
 fun ProfileViewScreen(
@@ -175,7 +183,7 @@ fun ProfileViewScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CalendarToday,
+                            imageVector = Icons.Default.Cake,
                             contentDescription = "Birth Date",
                             tint = Color(0xFF424242)
                         )
@@ -298,7 +306,7 @@ private suspend fun fetchUserData(context: Context): Map<String, Any?>? {
             }
 
         val url = URL("${NetworkConfig.getBaseUrl()}/user/$userId")
-        val connection = url.openConnection() as HttpURLConnection
+        val connection = createHttpsConnection(url, context)
 
         try {
             connection.requestMethod = "GET"
@@ -357,6 +365,7 @@ private suspend fun fetchUserData(context: Context): Map<String, Any?>? {
                 is java.net.ConnectException -> "Could not connect to server"
                 is java.net.SocketTimeoutException -> "Connection timed out"
                 is java.net.UnknownHostException -> "No internet connection"
+                is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
                 else -> "Error fetching user data: ${e.localizedMessage}"
             }
             withContext(Dispatchers.Main) {
@@ -367,6 +376,32 @@ private suspend fun fetchUserData(context: Context): Map<String, Any?>? {
         } finally {
             connection.disconnect()
         }
+    }
+}
+
+// Helper function to create SSL context
+private fun createSSLContext(context: Context): SSLContext {
+    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+    keyStore.load(null, null)
+
+    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
+        val certificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate = certificateFactory.generateCertificate(certInputStream)
+        keyStore.setCertificateEntry("my_cert", certificate)
+    }
+
+    trustManagerFactory.init(keyStore)
+    val sslContext = SSLContext.getInstance("TLS")
+    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+    return sslContext
+}
+
+// Helper function to create HTTPS connection
+private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
+    return (url.openConnection() as HttpsURLConnection).apply {
+        sslSocketFactory = createSSLContext(context).socketFactory
+        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

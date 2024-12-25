@@ -50,6 +50,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.security.KeyStore
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.HostnameVerifier
 
 @Composable
 fun RunningSessionsScreen(
@@ -435,7 +442,7 @@ private suspend fun fetchRunningSessions(
         val dateStr = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
         val url = URL("${NetworkConfig.getBaseUrl()}/running/$dateStr")
 
-        val connection = url.openConnection() as HttpURLConnection
+        val connection = createHttpsConnection(url, context)
 
         try {
             connection.requestMethod = "GET"
@@ -507,6 +514,7 @@ private suspend fun fetchRunningSessions(
                 is java.net.ConnectException -> "Could not connect to server"
                 is java.net.SocketTimeoutException -> "Connection timed out"
                 is java.net.UnknownHostException -> "No internet connection"
+                is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
                 else -> "Error fetching running sessions: ${e.localizedMessage}"
             }
             withContext(Dispatchers.Main) {
@@ -547,6 +555,32 @@ private fun parseRunningSessions(response: String): List<Map<String, Any>>? {
     } catch (e: Exception) {
         e.printStackTrace()
         null
+    }
+}
+
+// Helper function to create SSL context
+private fun createSSLContext(context: Context): SSLContext {
+    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+    keyStore.load(null, null)
+
+    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
+        val certificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate = certificateFactory.generateCertificate(certInputStream)
+        keyStore.setCertificateEntry("my_cert", certificate)
+    }
+
+    trustManagerFactory.init(keyStore)
+    val sslContext = SSLContext.getInstance("TLS")
+    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+    return sslContext
+}
+
+// Helper function to create HTTPS connection
+private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
+    return (url.openConnection() as HttpsURLConnection).apply {
+        sslSocketFactory = createSSLContext(context).socketFactory
+        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

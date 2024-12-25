@@ -65,9 +65,16 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyStore
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
 
 sealed class LogoutResult {
     data object Success : LogoutResult()
@@ -129,6 +136,30 @@ fun ActivitySelectionCard(
         duration = 0,
         modifier = modifier.clickable(onClick = activityData.third)
     )
+}
+
+private fun createSSLContext(context: Context): SSLContext {
+    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+    keyStore.load(null, null)
+
+    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
+        val certificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate = certificateFactory.generateCertificate(certInputStream)
+        keyStore.setCertificateEntry("my_cert", certificate)
+    }
+
+    trustManagerFactory.init(keyStore)
+    val sslContext = SSLContext.getInstance("TLS")
+    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+    return sslContext
+}
+
+private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
+    return (url.openConnection() as HttpsURLConnection).apply {
+        sslSocketFactory = createSSLContext(context).socketFactory
+        hostnameVerifier = HostnameVerifier { _, _ -> true }
+    }
 }
 
 @SuppressLint("NewApi")
@@ -370,399 +401,6 @@ fun OverviewScreen(
                 }
             )
         }
-    }
-}
-
-
-private suspend fun fetchOverviewData(
-    context: Context,
-    selectedDate: String? = null
-): Map<String, Any?>? {
-    return withContext(Dispatchers.IO) {
-        val url = URL("${NetworkConfig.getBaseUrl()}/activity-list")
-        val connection = url.openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("Content-Type", "application/json")
-
-            // Retrieve JWT token from SharedPreferences
-            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: run {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Please login to view overview", Toast.LENGTH_LONG).show()
-                    }
-                    return@withContext null
-                }
-
-            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
-            connection.doOutput = true
-
-            // Use the selected date or default to current date
-            val dateToUse = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-
-            // Create JSON payload with the date
-            val jsonPayload = JSONObject().apply {
-                put("date", dateToUse)
-            }
-
-            OutputStreamWriter(connection.outputStream).use { it.write(jsonPayload.toString()) }
-
-            // Process response
-            when (val responseCode = connection.responseCode) {
-                HttpURLConnection.HTTP_OK -> {
-                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-                    parseOverviewData(responseText)
-                }
-                HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Session expired. Please login again", Toast.LENGTH_LONG).show()
-                    }
-                    null
-                }
-                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "No data found for selected date", Toast.LENGTH_SHORT).show()
-                    }
-                    null
-                }
-                else -> {
-                    // Try to get error message from response
-                    val errorStream = connection.errorStream
-                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
-                    val errorMessage = errorResponse?.let {
-                        try {
-                            val jsonError = JSONObject(it)
-                            jsonError.getString("message")
-                        } catch (e: Exception) {
-                            "Failed to fetch overview data: $responseCode"
-                        }
-                    } ?: "Failed to fetch overview data: $responseCode"
-
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
-                    }
-                    null
-                }
-            }
-        } catch (e: Exception) {
-            val errorMessage = when (e) {
-                is java.net.ConnectException -> "Could not connect to server"
-                is java.net.SocketTimeoutException -> "Connection timed out"
-                is java.net.UnknownHostException -> "No internet connection"
-                else -> "Error fetching overview data: ${e.localizedMessage}"
-            }
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
-            }
-            e.printStackTrace()
-            null
-        } finally {
-            connection.disconnect()
-        }
-    }
-}
-
-private fun parseOverviewData(response: String): Map<String, Any?>? {
-    return try {
-        val jsonResponse = JSONObject(response)
-        val activity = jsonResponse.optJSONObject("activity") ?: return null
-
-        // Helper function to safely get value from array
-        fun getValueFromArray(arrayName: String, key: String): Int? {
-            return if ((activity.optJSONArray(arrayName)?.length() ?: 0) > 0) {
-                activity.optJSONArray(arrayName)?.optJSONObject(0)?.optInt(key)
-            } else null
-        }
-
-        mapOf(
-            // User data - now we have user array in the response
-            "userName" to if ((activity.optJSONArray("user")?.length() ?: 0) > 0) {
-                activity.optJSONArray("user")?.optJSONObject(0)?.optString("name")
-            } else null,
-
-            // Steps data
-            "steps" to getValueFromArray("steps", "count"),
-            "stepsGoal" to getValueFromArray("steps", "goal"),
-
-            // Walking data
-            "walkingDuration" to getValueFromArray("walking", "duration"),
-            "walkingAvgPulse" to getValueFromArray("walking", "average_pulse"),
-
-            // Running data - empty array in response will return null
-            "runningDuration" to getValueFromArray("running", "duration"),
-            "runningAvgPulse" to getValueFromArray("running", "average_pulse"),
-
-            // Cycling data - empty array in response will return null
-            "cyclingDuration" to getValueFromArray("cycling", "duration"),
-            "cyclingAvgPulse" to getValueFromArray("cycling", "average_pulse")
-        )
-    } catch (e: Exception) {
-        null
-    }
-}
-
-private suspend fun fetchSevenDaysData(
-    context: Context,
-    selectedDate: String? = null
-): Map<String, List<Map<String, Any>>>? {
-    return withContext(Dispatchers.IO) {
-        val url = URL("${NetworkConfig.getBaseUrl()}/activity-list-seven-days")
-        val connection = url.openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("Content-Type", "application/json")
-
-            // Retrieve JWT token from SharedPreferences
-            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: run {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Please login to view data", Toast.LENGTH_LONG).show()
-                    }
-                    return@withContext null
-                }
-
-            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
-            connection.doOutput = true
-
-            // Use the selected date or default to current date
-            val dateToUse = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-
-            // Create JSON payload with the date
-            val jsonPayload = JSONObject().apply {
-                put("date", dateToUse)
-            }
-
-            OutputStreamWriter(connection.outputStream).use { it.write(jsonPayload.toString()) }
-
-            // Process response
-            when (val responseCode = connection.responseCode) {
-                HttpURLConnection.HTTP_OK -> {
-                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-                    parseSevenDaysData(responseText)
-                }
-                HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Session expired. Please login again", Toast.LENGTH_LONG).show()
-                    }
-                    null
-                }
-                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "No data found for selected date range", Toast.LENGTH_SHORT).show()
-                    }
-                    null
-                }
-                else -> {
-                    val errorStream = connection.errorStream
-                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
-                    val errorMessage = errorResponse?.let {
-                        try {
-                            val jsonError = JSONObject(it)
-                            jsonError.getString("message")
-                        } catch (e: Exception) {
-                            "Failed to fetch data: $responseCode"
-                        }
-                    } ?: "Failed to fetch data: $responseCode"
-
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
-                    }
-                    null
-                }
-            }
-        } catch (e: Exception) {
-            val errorMessage = when (e) {
-                is java.net.ConnectException -> "Could not connect to server"
-                is java.net.SocketTimeoutException -> "Connection timed out"
-                is java.net.UnknownHostException -> "No internet connection"
-                else -> "Error fetching data: ${e.localizedMessage}"
-            }
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
-            }
-            e.printStackTrace()
-            null
-        } finally {
-            connection.disconnect()
-        }
-    }
-}
-
-private fun parseSevenDaysData(response: String): Map<String, List<Map<String, Any>>>? {
-    return try {
-        val jsonResponse = JSONObject(response)
-        val activities = jsonResponse.getJSONArray("activities")
-        val dateRange = jsonResponse.getJSONObject("date_range")
-
-        val activityList = mutableListOf<Map<String, Any>>()
-
-        // Parse each day's data
-        for (i in 0 until activities.length()) {
-            val dayData = activities.getJSONObject(i)
-            activityList.add(
-                mapOf(
-                    "date" to dayData.getString("date"),
-                    "duration" to dayData.getInt("duration"),
-                    "steps" to dayData.getInt("steps")
-                )
-            )
-        }
-
-        mapOf(
-            "activities" to activityList,
-            "dateRange" to listOf(
-                mapOf(
-                    "startDate" to dateRange.getString("start_date"),
-                    "endDate" to dateRange.getString("end_date")
-                )
-            )
-        )
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
-    }
-}
-
-private suspend fun makeUpdateStepsRequest(
-    count: Int?,
-    context: Context
-): StepsUpdateResult {
-    val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
-
-    val connection = withContext(Dispatchers.IO) {
-        url.openConnection() as HttpURLConnection
-    }
-
-    return try {
-        connection.requestMethod = "PATCH"
-        connection.setRequestProperty("Content-Type", "application/json")
-
-        // Retrieve the JWT token from SharedPreferences
-        val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return StepsUpdateResult.Error("Please login to update steps goal")
-
-        // Add the JWT token to the Authorization header
-        connection.setRequestProperty("Authorization", "Bearer $jwtToken")
-        connection.doOutput = true
-
-        // Create JSON object for the steps update data
-        val jsonBody = JSONObject().apply {
-            count?.let { put("count", it) }
-        }
-
-        // Write the JSON data to the output stream
-        withContext(Dispatchers.IO) {
-            OutputStreamWriter(connection.outputStream).apply {
-                write(jsonBody.toString())
-                flush()
-                close()
-            }
-        }
-
-        when (val responseCode = connection.responseCode) {
-            HttpURLConnection.HTTP_CREATED -> {
-                StepsUpdateResult.Success
-            }
-            HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                StepsUpdateResult.Error("Session expired. Please login again")
-            }
-            HttpURLConnection.HTTP_BAD_REQUEST -> {
-                // Try to get error message from response
-                val errorStream = connection.errorStream
-                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
-                val errorMessage = errorResponse?.let {
-                    try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Invalid steps count"
-                    } catch (e: Exception) {
-                        "Invalid steps goal"
-                    }
-                } ?: "Invalid steps goal"
-                StepsUpdateResult.Error(errorMessage)
-            }
-            else -> {
-                // Try to get error message from response
-                val errorStream = connection.errorStream
-                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
-                val errorMessage = errorResponse?.let {
-                    try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Failed to update steps goal: $responseCode"
-                    } catch (e: Exception) {
-                        "Failed to update steps goal: $responseCode"
-                    }
-                } ?: "Failed to update steps goal: $responseCode"
-                StepsUpdateResult.Error(errorMessage)
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        val errorMessage = when (e) {
-            is java.net.ConnectException -> "Could not connect to server"
-            is java.net.SocketTimeoutException -> "Connection timed out"
-            is java.net.UnknownHostException -> "No internet connection"
-            else -> "Error updating steps goal: ${e.localizedMessage}"
-        }
-        StepsUpdateResult.Error(errorMessage)
-    } finally {
-        connection.disconnect()
-    }
-}
-
-private suspend fun makeLogoutRequest(context: Context): LogoutResult {
-    val url = URL("${NetworkConfig.getBaseUrl()}/logout")
-    val connection = withContext(Dispatchers.IO) {
-        url.openConnection() as HttpURLConnection
-    }
-
-    return try {
-        connection.requestMethod = "POST"
-        connection.setRequestProperty("Content-Type", "application/json")
-
-        // Get the token
-        val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return LogoutResult.Success.also {
-                clearUserData(context)
-            }
-
-        // Add the JWT token to the Authorization header WITH "Bearer " prefix
-        connection.setRequestProperty("Authorization", "Bearer $jwtToken") // Make sure there's a space after "Bearer"
-
-        when (connection.responseCode) {
-            HttpURLConnection.HTTP_OK -> {
-                clearUserData(context)
-                LogoutResult.Success
-            }
-            HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                clearUserData(context)
-                // Maybe add debug logging here
-                println("Unauthorized error. Token: $jwtToken")
-                LogoutResult.Success
-            }
-            else -> {
-                clearUserData(context)
-                LogoutResult.Success
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        clearUserData(context)
-        LogoutResult.Success
-    } finally {
-        connection.disconnect()
-    }
-}
-
-private suspend fun clearUserData(context: Context) {
-    withContext(Dispatchers.IO) {
-        context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            .edit()
-            .clear()
-            .apply()
     }
 }
 
@@ -1146,6 +784,410 @@ fun ActivityChart(
                 }
             }
         }
+    }
+}
+
+private suspend fun fetchOverviewData(
+    context: Context,
+    selectedDate: String? = null
+): Map<String, Any?>? {
+    return withContext(Dispatchers.IO) {
+        val url = URL("${NetworkConfig.getBaseUrl()}/activity-list")
+        val connection = createHttpsConnection(url, context)
+
+        try {
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Content-Type", "application/json")
+
+            // Retrieve JWT token from SharedPreferences
+            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            val jwtToken = sharedPreferences.getString("access_token", null)
+                ?: run {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Please login to view overview", Toast.LENGTH_LONG).show()
+                    }
+                    return@withContext null
+                }
+
+            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+            connection.doOutput = true
+
+            // Use the selected date or default to current date
+            val dateToUse = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+
+            // Create JSON payload with the date
+            val jsonPayload = JSONObject().apply {
+                put("date", dateToUse)
+            }
+
+            OutputStreamWriter(connection.outputStream).use { it.write(jsonPayload.toString()) }
+
+            // Process response
+            when (val responseCode = connection.responseCode) {
+                HttpURLConnection.HTTP_OK -> {
+                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                    parseOverviewData(responseText)
+                }
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Session expired. Please login again", Toast.LENGTH_LONG).show()
+                    }
+                    null
+                }
+                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No data found for selected date", Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
+                else -> {
+                    // Try to get error message from response
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    val errorMessage = errorResponse?.let {
+                        try {
+                            val jsonError = JSONObject(it)
+                            jsonError.getString("message")
+                        } catch (e: Exception) {
+                            "Failed to fetch overview data: $responseCode"
+                        }
+                    } ?: "Failed to fetch overview data: $responseCode"
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
+                else -> "Error fetching overview data: ${e.localizedMessage}"
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            }
+            e.printStackTrace()
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+}
+
+private fun parseOverviewData(response: String): Map<String, Any?>? {
+    return try {
+        val jsonResponse = JSONObject(response)
+        val activity = jsonResponse.optJSONObject("activity") ?: return null
+
+        // Helper function to safely get value from array
+        fun getValueFromArray(arrayName: String, key: String): Int? {
+            return if ((activity.optJSONArray(arrayName)?.length() ?: 0) > 0) {
+                activity.optJSONArray(arrayName)?.optJSONObject(0)?.optInt(key)
+            } else null
+        }
+
+        mapOf(
+            // User data - now we have user array in the response
+            "userName" to if ((activity.optJSONArray("user")?.length() ?: 0) > 0) {
+                activity.optJSONArray("user")?.optJSONObject(0)?.optString("name")
+            } else null,
+
+            // Steps data
+            "steps" to getValueFromArray("steps", "count"),
+            "stepsGoal" to getValueFromArray("steps", "goal"),
+
+            // Walking data
+            "walkingDuration" to getValueFromArray("walking", "duration"),
+            "walkingAvgPulse" to getValueFromArray("walking", "average_pulse"),
+
+            // Running data - empty array in response will return null
+            "runningDuration" to getValueFromArray("running", "duration"),
+            "runningAvgPulse" to getValueFromArray("running", "average_pulse"),
+
+            // Cycling data - empty array in response will return null
+            "cyclingDuration" to getValueFromArray("cycling", "duration"),
+            "cyclingAvgPulse" to getValueFromArray("cycling", "average_pulse")
+        )
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private suspend fun fetchSevenDaysData(
+    context: Context,
+    selectedDate: String? = null
+): Map<String, List<Map<String, Any>>>? {
+    return withContext(Dispatchers.IO) {
+        val url = URL("${NetworkConfig.getBaseUrl()}/activity-list-seven-days")
+        val connection = createHttpsConnection(url, context)
+
+        try {
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Content-Type", "application/json")
+
+            // Retrieve JWT token from SharedPreferences
+            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            val jwtToken = sharedPreferences.getString("access_token", null)
+                ?: run {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Please login to view data", Toast.LENGTH_LONG).show()
+                    }
+                    return@withContext null
+                }
+
+            connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+            connection.doOutput = true
+
+            // Use the selected date or default to current date
+            val dateToUse = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+
+            // Create JSON payload with the date
+            val jsonPayload = JSONObject().apply {
+                put("date", dateToUse)
+            }
+
+            OutputStreamWriter(connection.outputStream).use { it.write(jsonPayload.toString()) }
+
+            // Process response
+            when (val responseCode = connection.responseCode) {
+                HttpURLConnection.HTTP_OK -> {
+                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                    parseSevenDaysData(responseText)
+                }
+                HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Session expired. Please login again", Toast.LENGTH_LONG).show()
+                    }
+                    null
+                }
+                HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No data found for selected date range", Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
+                else -> {
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    val errorMessage = errorResponse?.let {
+                        try {
+                            val jsonError = JSONObject(it)
+                            jsonError.getString("message")
+                        } catch (e: Exception) {
+                            "Failed to fetch data: $responseCode"
+                        }
+                    } ?: "Failed to fetch data: $responseCode"
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            val errorMessage = when (e) {
+                is java.net.ConnectException -> "Could not connect to server"
+                is java.net.SocketTimeoutException -> "Connection timed out"
+                is java.net.UnknownHostException -> "No internet connection"
+                is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
+                else -> "Error fetching data: ${e.localizedMessage}"
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            }
+            e.printStackTrace()
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+}
+
+private fun parseSevenDaysData(response: String): Map<String, List<Map<String, Any>>>? {
+    return try {
+        val jsonResponse = JSONObject(response)
+        val activities = jsonResponse.getJSONArray("activities")
+        val dateRange = jsonResponse.getJSONObject("date_range")
+
+        val activityList = mutableListOf<Map<String, Any>>()
+
+        // Parse each day's data
+        for (i in 0 until activities.length()) {
+            val dayData = activities.getJSONObject(i)
+            activityList.add(
+                mapOf(
+                    "date" to dayData.getString("date"),
+                    "duration" to dayData.getInt("duration"),
+                    "steps" to dayData.getInt("steps")
+                )
+            )
+        }
+
+        mapOf(
+            "activities" to activityList,
+            "dateRange" to listOf(
+                mapOf(
+                    "startDate" to dateRange.getString("start_date"),
+                    "endDate" to dateRange.getString("end_date")
+                )
+            )
+        )
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
+private suspend fun makeUpdateStepsRequest(
+    count: Int?,
+    context: Context
+): StepsUpdateResult {
+    val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
+
+    val connection = withContext(Dispatchers.IO) {
+        createHttpsConnection(url, context)
+    }
+
+    return try {
+        connection.requestMethod = "PATCH"
+        connection.setRequestProperty("Content-Type", "application/json")
+
+        // Retrieve the JWT token from SharedPreferences
+        val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+        val jwtToken = sharedPreferences.getString("access_token", null)
+            ?: return StepsUpdateResult.Error("Please login to update steps goal")
+
+        // Add the JWT token to the Authorization header
+        connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+        connection.doOutput = true
+
+        // Create JSON object for the steps update data
+        val jsonBody = JSONObject().apply {
+            count?.let { put("count", it) }
+        }
+
+        // Write the JSON data to the output stream
+        withContext(Dispatchers.IO) {
+            OutputStreamWriter(connection.outputStream).apply {
+                write(jsonBody.toString())
+                flush()
+                close()
+            }
+        }
+
+        when (val responseCode = connection.responseCode) {
+            HttpURLConnection.HTTP_CREATED -> {
+                StepsUpdateResult.Success
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                StepsUpdateResult.Error("Session expired. Please login again")
+            }
+            HttpURLConnection.HTTP_BAD_REQUEST -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Invalid steps count"
+                    } catch (e: Exception) {
+                        "Invalid steps goal"
+                    }
+                } ?: "Invalid steps goal"
+                StepsUpdateResult.Error(errorMessage)
+            }
+            else -> {
+                // Try to get error message from response
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                val errorMessage = errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message") ?: "Failed to update steps goal: $responseCode"
+                    } catch (e: Exception) {
+                        "Failed to update steps goal: $responseCode"
+                    }
+                } ?: "Failed to update steps goal: $responseCode"
+                StepsUpdateResult.Error(errorMessage)
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        val errorMessage = when (e) {
+            is java.net.ConnectException -> "Could not connect to server"
+            is java.net.SocketTimeoutException -> "Connection timed out"
+            is java.net.UnknownHostException -> "No internet connection"
+            is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
+            else -> "Error updating steps goal: ${e.localizedMessage}"
+        }
+        StepsUpdateResult.Error(errorMessage)
+    } finally {
+        connection.disconnect()
+    }
+}
+
+private suspend fun makeLogoutRequest(context: Context): LogoutResult {
+    val url = URL("${NetworkConfig.getBaseUrl()}/logout")
+    val connection = withContext(Dispatchers.IO) {
+        createHttpsConnection(url, context)
+    }
+
+    return try {
+        connection.requestMethod = "POST"
+        connection.setRequestProperty("Content-Type", "application/json")
+
+        // Get the token
+        val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+        val jwtToken = sharedPreferences.getString("access_token", null)
+            ?: return LogoutResult.Success.also {
+                clearUserData(context)
+            }
+
+        // Add the JWT token to the Authorization header WITH "Bearer " prefix
+        connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+
+        when (connection.responseCode) {
+            HttpURLConnection.HTTP_OK -> {
+                clearUserData(context)
+                LogoutResult.Success
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                clearUserData(context)
+                println("Unauthorized error. Token: $jwtToken")
+                LogoutResult.Success
+            }
+            else -> {
+                clearUserData(context)
+                LogoutResult.Success
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        val errorMessage = when (e) {
+            is java.net.ConnectException -> "Could not connect to server"
+            is java.net.SocketTimeoutException -> "Connection timed out"
+            is java.net.UnknownHostException -> "No internet connection"
+            is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
+            else -> "Error during logout: ${e.localizedMessage}"
+        }
+        println("Logout error: $errorMessage")
+        clearUserData(context)
+        LogoutResult.Success
+    } finally {
+        connection.disconnect()
+    }
+}
+
+private suspend fun clearUserData(context: Context) {
+    withContext(Dispatchers.IO) {
+        context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
     }
 }
 

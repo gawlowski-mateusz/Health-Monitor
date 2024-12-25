@@ -63,6 +63,13 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
+import java.security.KeyStore
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.HostnameVerifier
 
 sealed class CyclingSessionResult {
     data object Success : CyclingSessionResult()
@@ -484,7 +491,7 @@ private suspend fun makeAddNewCyclingSessionRequest(
     val url = URL("${NetworkConfig.getBaseUrl()}/cycling")
 
     val connection = withContext(Dispatchers.IO) {
-        url.openConnection() as HttpURLConnection
+        createHttpsConnection(url, context)
     }
 
     return try {
@@ -562,11 +569,38 @@ private suspend fun makeAddNewCyclingSessionRequest(
             is java.net.SocketTimeoutException -> "Connection timed out"
             is java.net.UnknownHostException -> "No internet connection"
             is java.lang.NumberFormatException -> "Invalid number format for duration or pulse"
+            is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
             else -> "Error adding cycling session: ${e.localizedMessage}"
         }
         CyclingSessionResult.Error(errorMessage)
     } finally {
         connection.disconnect()
+    }
+}
+
+// Helper function to create SSL context
+private fun createSSLContext(context: Context): SSLContext {
+    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+    keyStore.load(null, null)
+
+    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
+        val certificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate = certificateFactory.generateCertificate(certInputStream)
+        keyStore.setCertificateEntry("my_cert", certificate)
+    }
+
+    trustManagerFactory.init(keyStore)
+    val sslContext = SSLContext.getInstance("TLS")
+    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+    return sslContext
+}
+
+// Helper function to create HTTPS connection
+private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
+    return (url.openConnection() as HttpsURLConnection).apply {
+        sslSocketFactory = createSSLContext(context).socketFactory
+        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 
