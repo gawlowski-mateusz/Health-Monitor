@@ -10,15 +10,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Height
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -30,6 +35,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,8 +48,10 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,6 +63,7 @@ import java.net.URL
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.CertificateFactory
+import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
@@ -66,10 +75,131 @@ sealed class ProfileUpdateResult {
 }
 
 @Composable
+private fun ValidationItem(
+    text: String,
+    isValid: Boolean
+) {
+    Row(
+        modifier = Modifier.padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (isValid) Icons.Default.Check else Icons.Default.Close,
+            contentDescription = null,
+            tint = if (isValid) Color.Green else Color.Red,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = text,
+            modifier = Modifier.padding(start = 8.dp),
+            fontSize = 12.sp,
+            color = if (isValid) Color.Green else Color.Red
+        )
+    }
+}
+
+@Composable
+private fun PasswordValidation(
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    onPasswordStrengthChange: (String) -> Unit
+) {
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    // Password validation checks
+    val hasMinLength = password.length >= 8
+    val hasUppercase = password.any { it.isUpperCase() }
+    val hasLowercase = password.any { it.isLowerCase() }
+    val hasNumber = password.any { it.isDigit() }
+    val hasSpecialChar = password.any { !it.isLetterOrDigit() }
+
+    val passwordStrength = when {
+        password.isEmpty() -> "empty"
+        !hasMinLength || !hasUppercase || !hasLowercase || !hasNumber || !hasSpecialChar -> "weak"
+        password.length >= 14 -> "strong"
+        else -> "medium"
+    }
+
+    LaunchedEffect(passwordStrength) {
+        onPasswordStrengthChange(passwordStrength)
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = password,
+            onValueChange = { onPasswordChange(it) },
+            label = { Text("Password") },
+            visualTransformation = if (passwordVisible)
+                VisualTransformation.None
+            else
+                PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colorResource(id = R.color.light_blue),
+                focusedLabelColor = colorResource(id = R.color.light_blue),
+            ),
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                    )
+                }
+            }
+        )
+
+        if (password.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                ValidationItem(
+                    text = "At least 8 characters",
+                    isValid = hasMinLength
+                )
+                ValidationItem(
+                    text = "At least 1 uppercase letter",
+                    isValid = hasUppercase
+                )
+                ValidationItem(
+                    text = "At least 1 lowercase letter",
+                    isValid = hasLowercase
+                )
+                ValidationItem(
+                    text = "At least 1 number",
+                    isValid = hasNumber
+                )
+                ValidationItem(
+                    text = "At least 1 special character",
+                    isValid = hasSpecialChar
+                )
+                Text(
+                    text = "Password strength: ${passwordStrength.replaceFirstChar {
+                        if (it.isLowerCase()) it.titlecase(
+                            Locale.getDefault()
+                        ) else it.toString()
+                    }}",
+                    color = when (passwordStrength) {
+                        "weak" -> Color.Red
+                        "medium" -> Color.Yellow
+                        "strong" -> Color.Green
+                        else -> Color.Gray
+                    },
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
     var heightText by remember { mutableStateOf("") }
     var weightText by remember { mutableStateOf("") }
     var passwordText by remember { mutableStateOf("") }
+    var passwordStrength by remember { mutableStateOf("empty") }
     var heightError by remember { mutableStateOf<String?>(null) }
     var weightError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -104,7 +234,16 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
                 IconButton(onClick = {
                     val height = heightText.toIntOrNull()
                     val weight = weightText.toFloatOrNull()
-                    val password = passwordText.takeIf { it.isNotBlank() }
+
+                    // Only allow non-empty password if it's strong enough
+                    val password = when {
+                        passwordText.isEmpty() -> null
+                        passwordStrength == "weak" -> {
+                            Toast.makeText(context, "Please ensure password meets all requirements", Toast.LENGTH_LONG).show()
+                            return@IconButton
+                        }
+                        else -> passwordText
+                    }
 
                     if (heightText.isNotEmpty() && height == null ||
                         weightText.isNotEmpty() && weight == null ||
@@ -249,10 +388,10 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
 
                     Divider(color = Color(0xFF424242), thickness = 1.dp)
 
-                    // Password Row
+                    // Password Row with Validation
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
                         Icon(
                             imageVector = Icons.Default.Password,
@@ -262,17 +401,10 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        OutlinedTextField(
-                            value = passwordText,
-                            onValueChange = { passwordText = it },
-                            label = { Text("Password") },
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = colorResource(id = R.color.light_blue),
-                                focusedLabelColor = colorResource(id = R.color.light_blue),
-                            )
+                        PasswordValidation(
+                            password = passwordText,
+                            onPasswordChange = { passwordText = it },
+                            onPasswordStrengthChange = { passwordStrength = it }
                         )
                     }
                 }

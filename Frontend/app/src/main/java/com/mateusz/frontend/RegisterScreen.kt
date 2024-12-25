@@ -81,24 +81,23 @@ import javax.net.ssl.TrustManagerFactory
 
 
 @Composable
-fun PasswordValidation(
+private fun PasswordValidation(
     password: String,
-    email: String,
     onPasswordChange: (String) -> Unit,
     onPasswordStrengthChange: (String) -> Unit
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     val hasMinLength = password.length >= 8
-    val hasSymbolOrNumber = password.any { it.isDigit() || !it.isLetterOrDigit() }
-    val doesNotContainEmail = email.isEmpty() || !password.contains(email.substringBefore("@"))
+    val hasUppercase = password.any { it.isUpperCase() }
+    val hasLowercase = password.any { it.isLowerCase() }
+    val hasNumber = password.any { it.isDigit() }
+    val hasSpecialChar = password.any { !it.isLetterOrDigit() }
 
     val passwordStrength = when {
         password.isEmpty() -> "empty"
-        !hasMinLength -> "weak"
-        !hasSymbolOrNumber -> "weak"
-        !doesNotContainEmail -> "weak"
-        password.length < 12 -> "medium"
-        else -> "strong"
+        !hasMinLength || !hasUppercase || !hasLowercase || !hasNumber || !hasSpecialChar -> "weak"
+        password.length >= 14 -> "strong"
+        else -> "medium"
     }
 
     LaunchedEffect(passwordStrength) {
@@ -141,15 +140,27 @@ fun PasswordValidation(
                     isValid = hasMinLength
                 )
                 ValidationItem(
-                    text = "Contains a number or symbol",
-                    isValid = hasSymbolOrNumber
+                    text = "At least 1 uppercase letter",
+                    isValid = hasUppercase
                 )
                 ValidationItem(
-                    text = "Cannot contain email address",
-                    isValid = doesNotContainEmail
+                    text = "At least 1 lowercase letter",
+                    isValid = hasLowercase
+                )
+                ValidationItem(
+                    text = "At least 1 number",
+                    isValid = hasNumber
+                )
+                ValidationItem(
+                    text = "At least 1 special character",
+                    isValid = hasSpecialChar
                 )
                 Text(
-                    text = "Password strength: ${passwordStrength.capitalize()}",
+                    text = "Password strength: ${passwordStrength.replaceFirstChar {
+                        if (it.isLowerCase()) it.titlecase(
+                            Locale.getDefault()
+                        ) else it.toString()
+                    }}",
                     color = when (passwordStrength) {
                         "weak" -> Color.Red
                         "medium" -> Color.Yellow
@@ -202,7 +213,7 @@ fun RegisterScreen(
     var password by remember { mutableStateOf("") }
     var passwordStrength by remember { mutableStateOf("empty") }
     var birthDateInput by remember { mutableStateOf<LocalDate?>(null) }
-    var gender by remember { mutableStateOf("") }
+    var gender: String? by remember { mutableStateOf(null) }
     var weight by remember { mutableStateOf("") }
     var height by remember { mutableStateOf("") }
 
@@ -274,7 +285,6 @@ fun RegisterScreen(
 
                 PasswordValidation(
                     password = password,
-                    email = email,
                     onPasswordChange = { password = it },
                     onPasswordStrengthChange = { passwordStrength = it }
                 )
@@ -344,14 +354,14 @@ fun RegisterScreen(
                         .padding(16.dp)
                         .clickable { showGenderMenu = true }
                 ) {
-                    if (gender == "") {
+                    if (gender == null) {
                         Text(
                             text = "Gender (Male/Female)",
                             color = Color.Black
                         )
                     } else {
                         Text(
-                            text = gender,
+                            text = gender!!,
                             color = Color.Black
                         )
                     }
@@ -404,11 +414,11 @@ fun RegisterScreen(
             ) {
                 Button(
                     onClick = {
-                        // Only allow registration if password is not weak
+                        // Only allow registration if password is strong enough
                         if (passwordStrength == "weak") {
                             Toast.makeText(
                                 context,
-                                "Please enter a stronger password",
+                                "Please ensure password meets all requirements",
                                 Toast.LENGTH_LONG
                             ).show()
                             return@Button
@@ -424,18 +434,22 @@ fun RegisterScreen(
                                         .toString()
                                 )
                                 val result =
-                                    makeRegisterRequest(
-                                        name,
-                                        email,
-                                        password,
-                                        birthDate,
-                                        gender,
-                                        weight,
-                                        height,
-                                        context
-                                    )
+                                    gender?.let {
+                                        makeRegisterRequest(
+                                            name,
+                                            email,
+                                            password,
+                                            birthDate,
+                                            it,
+                                            weight,
+                                            height,
+                                            context
+                                        )
+                                    }
                                 withContext(Dispatchers.Main) {
-                                    registerResult = result
+                                    if (result != null) {
+                                        registerResult = result
+                                    }
                                     if (result == "Success") {
                                         onRegisterSuccess()
                                     } else {
