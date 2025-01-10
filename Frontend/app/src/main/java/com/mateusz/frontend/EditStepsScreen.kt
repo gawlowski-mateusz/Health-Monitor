@@ -169,13 +169,14 @@ fun EditStepsScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
     }
 }
 
-private suspend fun makeEditStepsRequest(
+suspend fun makeEditStepsRequest(
     goal: Int?,
-    context: Context
+    context: Context,
+    testConnection: HttpsURLConnection? = null
 ): StepsUpdateResult {
     val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
 
-    val connection = withContext(Dispatchers.IO) {
+    val connection = testConnection ?: withContext(Dispatchers.IO) {
         createHttpsConnection(url, context)
     }
 

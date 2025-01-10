@@ -484,15 +484,16 @@ fun NewWalkingSessionScreen(
     }
 }
 
-private suspend fun makeAddNewWalkingSessionRequest(
+suspend fun makeAddNewWalkingSessionRequest(
     duration: Int,
     averagePulse: Int,
     password: String?,
-    context: Context
+    context: Context,
+    testConnection: HttpsURLConnection? = null
 ): WalkingSessionResult {
     val url = URL("${NetworkConfig.getBaseUrl()}/walking")
 
-    val connection = withContext(Dispatchers.IO) {
+    val connection = testConnection ?: withContext(Dispatchers.IO) {
         createHttpsConnection(url, context)
     }
 

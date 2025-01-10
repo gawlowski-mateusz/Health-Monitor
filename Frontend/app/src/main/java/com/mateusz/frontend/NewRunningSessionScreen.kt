@@ -482,15 +482,16 @@ fun NewRunningSessionScreen(
     }
 }
 
-private suspend fun makeAddNewRunningSessionRequest(
+suspend fun makeAddNewRunningSessionRequest(
     duration: Int,
     averagePulse: Int,
     password: String?,
-    context: Context
+    context: Context,
+    testConnection: HttpsURLConnection? = null
 ): RunningSessionResult {
     val url = URL("${NetworkConfig.getBaseUrl()}/running")
 
-    val connection = withContext(Dispatchers.IO) {
+    val connection = testConnection ?: withContext(Dispatchers.IO) {
         createHttpsConnection(url, context)
     }
 

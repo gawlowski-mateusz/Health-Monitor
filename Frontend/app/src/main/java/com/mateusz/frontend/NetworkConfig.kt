@@ -7,13 +7,14 @@ object NetworkConfig {
 //    private const val DEVICE_URL = "http://192.168.0.192:8000"
 //    private const val DEVICE_URL = "http://192.168.0.59:8000"
 //    private const val DEVICE_URL = "http://192.168.119.41:8000"
-    private const val DEVICE_URL = "https://192.168.0.101:443"
+//    private const val DEVICE_URL = "https://192.168.106.41:443"
+    private const val DEVICE_URL = "https://192.168.0.193:443"
 
     fun getBaseUrl(): String {
         return if (isEmulator()) EMULATOR_URL else DEVICE_URL
     }
 
-    private fun isEmulator(): Boolean {
+    fun isEmulator(): Boolean {
         return (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")
                 || Build.FINGERPRINT.startsWith("generic")
                 || Build.FINGERPRINT.startsWith("unknown")

@@ -482,15 +482,16 @@ fun NewCyclingSessionScreen(
     }
 }
 
-private suspend fun makeAddNewCyclingSessionRequest(
+suspend fun makeAddNewCyclingSessionRequest(
     duration: Int,
     averagePulse: Int,
     password: String?,
-    context: Context
+    context: Context,
+    testConnection: HttpsURLConnection? = null
 ): CyclingSessionResult {
     val url = URL("${NetworkConfig.getBaseUrl()}/cycling")
 
-    val connection = withContext(Dispatchers.IO) {
+    val connection = testConnection ?: withContext(Dispatchers.IO) {
         createHttpsConnection(url, context)
     }
 
@@ -570,7 +571,19 @@ private suspend fun makeAddNewCyclingSessionRequest(
             is java.net.UnknownHostException -> "No internet connection"
             is java.lang.NumberFormatException -> "Invalid number format for duration or pulse"
             is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
-            else -> "Error adding cycling session: ${e.localizedMessage}"
+            else -> {
+                // Try to get error message from error stream if available
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                errorResponse?.let {
+                    try {
+                        val jsonError = JSONObject(it)
+                        jsonError.getString("message")
+                    } catch (e: Exception) {
+                        "Error adding cycling session: ${e.localizedMessage}"
+                    }
+                } ?: "Error adding cycling session: ${e.localizedMessage}"
+            }
         }
         CyclingSessionResult.Error(errorMessage)
     } finally {

@@ -413,15 +413,16 @@ fun EditProfileScreen(onSaveChoice: () -> Unit, onCancelChoice: () -> Unit) {
     }
 }
 
-private suspend fun makeEditProfileRequest(
+suspend fun makeEditProfileRequest(
     height: Int?,
     weight: Float?,
     password: String?,
-    context: Context
+    context: Context,
+    testConnection: HttpsURLConnection? = null
 ): ProfileUpdateResult {
     val url = URL("${NetworkConfig.getBaseUrl()}/update-profile")
 
-    val connection = withContext(Dispatchers.IO) {
+    val connection = testConnection ?: withContext(Dispatchers.IO) {
         createHttpsConnection(url, context)
     }
 

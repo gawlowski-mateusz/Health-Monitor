@@ -165,10 +165,11 @@ fun LoginScreen(
     }
 }
 
-private suspend fun makeLoginRequest(
+suspend fun makeLoginRequest(
     email: String,
     password: String,
-    context: Context
+    context: Context,
+    testConnection: HttpsURLConnection? = null
 ): String {
     // Clear existing tokens
     withContext(Dispatchers.IO) {
@@ -201,10 +202,9 @@ private suspend fun makeLoginRequest(
     val url = URL("${NetworkConfig.getBaseUrl()}/login")
 
     // Cast to HttpsURLConnection instead of HttpURLConnection
-    val connection = withContext(Dispatchers.IO) {
-        (url.openConnection() as HttpsURLConnection).apply {
+    val connection = testConnection ?: withContext(Dispatchers.IO) {
+        (URL("${NetworkConfig.getBaseUrl()}/login").openConnection() as HttpsURLConnection).apply {
             sslSocketFactory = sslContext.socketFactory
-            // Trust all hostnames in development
             hostnameVerifier = HostnameVerifier { _, _ -> true }
         }
     }

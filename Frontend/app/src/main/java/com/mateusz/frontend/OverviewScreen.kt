@@ -1042,13 +1042,14 @@ private fun parseSevenDaysData(response: String): Map<String, List<Map<String, A
     }
 }
 
-private suspend fun makeUpdateStepsRequest(
+suspend fun makeUpdateStepsRequest(
     count: Int?,
-    context: Context
+    context: Context,
+    testConnection: HttpsURLConnection? = null
 ): StepsUpdateResult {
     val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
 
-    val connection = withContext(Dispatchers.IO) {
+    val connection = testConnection ?: withContext(Dispatchers.IO) {
         createHttpsConnection(url, context)
     }
 

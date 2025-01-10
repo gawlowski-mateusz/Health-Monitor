@@ -284,7 +284,10 @@ fun getUserIdFromJwt(jwt: String): String? {
     }
 }
 
-private suspend fun fetchUserData(context: Context): Map<String, Any?>? {
+suspend fun fetchUserData(
+    context: Context,
+    testConnection: HttpsURLConnection? = null
+): Map<String, Any?>? {
     return withContext(Dispatchers.IO) {
         // Retrieve JWT token from SharedPreferences
         val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
@@ -306,7 +309,7 @@ private suspend fun fetchUserData(context: Context): Map<String, Any?>? {
             }
 
         val url = URL("${NetworkConfig.getBaseUrl()}/user/$userId")
-        val connection = createHttpsConnection(url, context)
+        val connection = testConnection ?: createHttpsConnection(url, context)
 
         try {
             connection.requestMethod = "GET"
@@ -405,7 +408,7 @@ private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnectio
     }
 }
 
-private fun parseUserData(response: String): Map<String, Any?>? {
+fun parseUserData(response: String): Map<String, Any?>? {
     return try {
         val jsonResponse = JSONObject(response)
         mapOf(
@@ -423,7 +426,7 @@ private fun parseUserData(response: String): Map<String, Any?>? {
 }
 
 // Optional: Cache user data in SharedPreferences
-private fun cacheUserData(context: Context, userData: Map<String, Any?>) {
+fun cacheUserData(context: Context, userData: Map<String, Any?>) {
     context.getSharedPreferences("user_data", Context.MODE_PRIVATE).edit().apply {
         userData.forEach { (key, value) ->
             when (value) {

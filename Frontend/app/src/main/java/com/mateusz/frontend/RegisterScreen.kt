@@ -512,7 +512,7 @@ fun RegisterScreen(
     }
 }
 
-private suspend fun makeRegisterRequest(
+suspend fun makeRegisterRequest(
     name: String,
     email: String,
     password: String,
@@ -520,7 +520,8 @@ private suspend fun makeRegisterRequest(
     gender: String,
     weight: String?,
     height: String?,
-    context: Context
+    context: Context,
+    testConnection: HttpsURLConnection? = null
 ): String {
     val url = URL("${NetworkConfig.getBaseUrl()}/register")
 
@@ -545,8 +546,8 @@ private suspend fun makeRegisterRequest(
     sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
 
     // Cast to HttpsURLConnection and configure SSL
-    val connection = withContext(Dispatchers.IO) {
-        (url.openConnection() as HttpsURLConnection).apply {
+    val connection = testConnection ?: withContext(Dispatchers.IO) {
+        (URL("${NetworkConfig.getBaseUrl()}/register").openConnection() as HttpsURLConnection).apply {
             sslSocketFactory = sslContext.socketFactory
             hostnameVerifier = HostnameVerifier { _, _ -> true }
         }
