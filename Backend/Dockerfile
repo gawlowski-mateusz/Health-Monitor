@@ -10,4 +10,4 @@ COPY . .
 
 ENV PYTHONPATH=/app
 
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "wsgi:app"]
+CMD gunicorn --bind 0.0.0.0:$PORT wsgi:app
