@@ -6,7 +6,6 @@ from flask_jwt_extended import create_access_token, create_refresh_token, jwt_re
 from sqlalchemy.exc import SQLAlchemyError
 
 from db import db
-from app import flask_app
 from blocklist import BLOCKLIST
 from schemas import UserSchema, UserUpdateSchema, UserDeleteSchema, UserLoginSchema
 from models import UserModel
@@ -84,24 +83,14 @@ class TokenRefresh(MethodView):
     @jwt_required(refresh=True)
     def post(self):
         try:
-            # Log the full token payload
-            jwt_payload = get_jwt()
-            flask_app.logger.info(f"Refresh token payload: {jwt_payload}")
-
             current_user = get_jwt_identity()
-            flask_app.logger.info(f"Refresh request for user: {current_user}")
-
             new_access_token = create_access_token(identity=current_user, fresh=False)
             new_refresh_token = create_refresh_token(identity=current_user)
-
-            flask_app.logger.info(f"New tokens created for user: {current_user}")
-
             return {
                 "access_token": new_access_token,
                 "refresh_token": new_refresh_token
             }, 200
         except Exception as e:
-            flask_app.logger.error(f"Error in refresh endpoint: {str(e)}", exc_info=True)
             return jsonify({
                 "message": str(e),
                 "error": "refresh_error"
