@@ -1,6 +1,7 @@
 package com.mateusz.frontend
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -45,13 +46,7 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.KeyStore
-import java.security.SecureRandom
-import java.security.cert.CertificateFactory
-import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
 
 @Composable
 fun LoginScreen(
@@ -171,42 +166,18 @@ suspend fun makeLoginRequest(
     context: Context,
     testConnection: HttpsURLConnection? = null
 ): String {
-    // Clear existing tokens
-    withContext(Dispatchers.IO) {
-        context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            .edit()
-            .clear()
-            .apply()
-    }
-
-    // Create a trust manager that trusts the self-signed certificate
-    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-    withContext(Dispatchers.IO) {
-        keyStore.load(null, null)
-    }
-
-    // Load your certificate
-    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
-        val certificateFactory = CertificateFactory.getInstance("X.509")
-        val certificate = certificateFactory.generateCertificate(certInputStream)
-        keyStore.setCertificateEntry("my_cert", certificate)
-    }
-
-    trustManagerFactory.init(keyStore)
-
-    // Create SSL context with your trust manager
-    val sslContext = SSLContext.getInstance("TLS")
-    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+    val TAG = "LoginAPI"
 
     val url = URL("${NetworkConfig.getBaseUrl()}/login")
+    Log.d(TAG, "Making login request to: $url")
 
-    // Cast to HttpsURLConnection instead of HttpURLConnection
-    val connection = testConnection ?: withContext(Dispatchers.IO) {
-        (URL("${NetworkConfig.getBaseUrl()}/login").openConnection() as HttpsURLConnection).apply {
-            sslSocketFactory = sslContext.socketFactory
-            hostnameVerifier = HostnameVerifier { _, _ -> true }
-        }
+    val connection = testConnection ?: try {
+        withContext(Dispatchers.IO) {
+            url.openConnection()
+        } as HttpsURLConnection
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to create connection", e)
+        return "Could not connect to server"
     }
 
     return try {
@@ -214,13 +185,15 @@ suspend fun makeLoginRequest(
         connection.setRequestProperty("Content-Type", "application/json")
         connection.doOutput = true
 
+        // Create login request body
         val jsonBody = JSONObject().apply {
             put("email", email)
             put("password", password)
         }
 
-        println("Sending login data: $jsonBody")
+        Log.d(TAG, "Sending login request for email: $email")
 
+        // Send request
         withContext(Dispatchers.IO) {
             OutputStreamWriter(connection.outputStream).use { writer ->
                 writer.write(jsonBody.toString())
@@ -229,43 +202,91 @@ suspend fun makeLoginRequest(
         }
 
         val responseCode = connection.responseCode
-        println("Response code: $responseCode")
+        Log.d(TAG, "Login response code: $responseCode")
 
-        if (responseCode == HttpURLConnection.HTTP_OK) {
-            val response = connection.inputStream.bufferedReader().use { it.readText() }
-            println("Success response: $response")
+        when (responseCode) {
+            HttpURLConnection.HTTP_OK -> {
+                val response = connection.inputStream.bufferedReader().use { it.readText() }
+                Log.d(TAG, "Login successful")
 
-            val jsonResponse = JSONObject(response)
-            val accessToken = jsonResponse.getString("access_token")
-
-            withContext(Dispatchers.IO) {
-                context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-                    .edit()
-                    .putString("access_token", accessToken)
-                    .apply()
-            }
-
-            "Success"
-        } else {
-            connection.errorStream?.bufferedReader()?.use { it.readText() }?.let { errorResponse ->
-                println("Error response: $errorResponse")
                 try {
-                    JSONObject(errorResponse).getString("message")
-                        ?: "Failed with response code $responseCode"
+                    val jsonResponse = JSONObject(response)
+                    val accessToken = jsonResponse.getString("access_token")
+                    val refreshToken = jsonResponse.getString("refresh_token")
+
+                    Log.d(TAG, "Access token received: ${accessToken.take(10)}...")
+                    Log.d(TAG, "Refresh token received: ${refreshToken.take(10)}...")
+
+                    TokenManager.saveTokens(context, accessToken, refreshToken)
+
+                    // Verify tokens were saved
+                    val savedAccessToken = TokenManager.getAccessToken(context)
+                    Log.d(TAG, "Verified saved access token: ${savedAccessToken?.take(10) ?: "null"}...")
+
+                    "Success"
                 } catch (e: Exception) {
-                    "Failed with response code $responseCode"
+                    Log.e(TAG, "Error parsing login response", e)
+                    "Error: Failed to process login response"
                 }
-            } ?: "Failed with response code $responseCode"
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                Log.w(TAG, "Invalid credentials")
+                "Invalid email or password"
+            }
+            HttpURLConnection.HTTP_BAD_REQUEST -> {
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Bad request error: $errorResponse")
+
+                errorResponse?.let {
+                    try {
+                        JSONObject(it).getString("message") ?: "Invalid login data"
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse error response", e)
+                        "Invalid login data"
+                    }
+                } ?: "Invalid login data"
+            }
+            else -> {
+                val errorStream = connection.errorStream
+                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Unexpected error response: $errorResponse")
+
+                errorResponse?.let {
+                    try {
+                        JSONObject(it).getString("message")
+                            ?: "Login failed with response code $responseCode"
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse error response", e)
+                        "Login failed with response code $responseCode"
+                    }
+                } ?: "Login failed with response code $responseCode"
+            }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
-        when (e) {
-            is java.net.ConnectException -> "Error: Could not connect to server"
-            is java.net.SocketTimeoutException -> "Error: Connection timed out"
-            is java.net.UnknownHostException -> "Error: No internet connection"
-            is javax.net.ssl.SSLHandshakeException -> "Error: SSL certificate verification failed"
-            else -> "Error: ${e.localizedMessage}"
+        val errorMessage = when (e) {
+            is java.net.ConnectException -> {
+                Log.e(TAG, "Connection error", e)
+                "Could not connect to server"
+            }
+            is java.net.SocketTimeoutException -> {
+                Log.e(TAG, "Timeout error", e)
+                "Connection timed out"
+            }
+            is java.net.UnknownHostException -> {
+                Log.e(TAG, "No internet connection", e)
+                "No internet connection"
+            }
+            is javax.net.ssl.SSLHandshakeException -> {
+                Log.e(TAG, "SSL error", e)
+                "SSL certificate verification failed"
+            }
+            else -> {
+                Log.e(TAG, "Unexpected error during login", e)
+                "Login error: ${e.localizedMessage}"
+            }
         }
+        errorMessage
     } finally {
         connection.disconnect()
     }

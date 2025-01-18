@@ -1,7 +1,7 @@
 package com.mateusz.frontend
 
 import android.app.DatePickerDialog
-import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -65,20 +65,13 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.KeyStore
-import java.security.SecureRandom
-import java.security.cert.CertificateFactory
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-
 
 @Composable
 private fun PasswordValidation(
@@ -443,7 +436,6 @@ fun RegisterScreen(
                                             it,
                                             weight,
                                             height,
-                                            context
                                         )
                                     }
                                 withContext(Dispatchers.Main) {
@@ -520,36 +512,18 @@ suspend fun makeRegisterRequest(
     gender: String,
     weight: String?,
     height: String?,
-    context: Context,
     testConnection: HttpsURLConnection? = null
 ): String {
+    val TAG = "RegisterAPI"  // Define a tag for logging
     val url = URL("${NetworkConfig.getBaseUrl()}/register")
+    Log.d(TAG, "Attempting to connect to URL: $url")
 
-    // Create SSL context with the custom certificate
-    val trustManagerFactory =
-        TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-    withContext(Dispatchers.IO) {
-        keyStore.load(null, null)
-    }
-
-    // Load the certificate from raw resources
-    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
-        val certificateFactory = CertificateFactory.getInstance("X.509")
-        val certificate = certificateFactory.generateCertificate(certInputStream)
-        keyStore.setCertificateEntry("my_cert", certificate)
-    }
-
-    trustManagerFactory.init(keyStore)
-
-    val sslContext = SSLContext.getInstance("TLS")
-    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
-
-    // Cast to HttpsURLConnection and configure SSL
     val connection = testConnection ?: withContext(Dispatchers.IO) {
-        (URL("${NetworkConfig.getBaseUrl()}/register").openConnection() as HttpsURLConnection).apply {
-            sslSocketFactory = sslContext.socketFactory
-            hostnameVerifier = HostnameVerifier { _, _ -> true }
+        try {
+            url.openConnection() as HttpsURLConnection
+        } catch (e: Exception) {
+            Log.e(TAG, "Connection error: ${e.message}", e)
+            throw e
         }
     }
 
@@ -571,7 +545,7 @@ suspend fun makeRegisterRequest(
             height?.toIntOrNull()?.let { put("height", it) }
         }
 
-        println("Sending registration data: $jsonBody")
+        Log.d(TAG, "Sending registration data: $jsonBody")
 
         withContext(Dispatchers.IO) {
             OutputStreamWriter(connection.outputStream).use { writer ->
@@ -581,15 +555,15 @@ suspend fun makeRegisterRequest(
         }
 
         val responseCode = connection.responseCode
-        println("Response code: $responseCode")
+        Log.d(TAG, "Response code: $responseCode")
 
         if (responseCode == HttpURLConnection.HTTP_CREATED) {
             val response = connection.inputStream.bufferedReader().use { it.readText() }
-            println("Success response: $response")
+            Log.d(TAG, "Success response: $response")
             "Success"
         } else {
             connection.errorStream?.bufferedReader()?.use { it.readText() }?.let { errorResponse ->
-                println("Error response: $errorResponse")
+                Log.e(TAG, "Error response: $errorResponse")
                 try {
                     JSONObject(errorResponse).getString("message")
                         ?: "Failed with response code $responseCode"
@@ -599,13 +573,28 @@ suspend fun makeRegisterRequest(
             } ?: "Failed with response code $responseCode"
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "Request failed", e)
         when (e) {
-            is java.net.ConnectException -> "Error: Could not connect to server"
-            is java.net.SocketTimeoutException -> "Error: Connection timed out"
-            is java.net.UnknownHostException -> "Error: No internet connection"
-            is javax.net.ssl.SSLHandshakeException -> "Error: SSL certificate verification failed"
-            else -> "Error: ${e.localizedMessage}"
+            is java.net.ConnectException -> {
+                Log.e(TAG, "Connection error", e)
+                "Error: Could not connect to server"
+            }
+            is java.net.SocketTimeoutException -> {
+                Log.e(TAG, "Timeout error", e)
+                "Error: Connection timed out"
+            }
+            is java.net.UnknownHostException -> {
+                Log.e(TAG, "Unknown host error", e)
+                "Error: No internet connection"
+            }
+            is javax.net.ssl.SSLHandshakeException -> {
+                Log.e(TAG, "SSL error", e)
+                "Error: SSL certificate verification failed"
+            }
+            else -> {
+                Log.e(TAG, "Other error: ${e.localizedMessage}", e)
+                "Error: ${e.localizedMessage}"
+            }
         }
     } finally {
         connection.disconnect()

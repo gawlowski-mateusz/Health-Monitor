@@ -1,6 +1,7 @@
 package com.mateusz.frontend
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -60,14 +61,8 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.KeyStore
-import java.security.SecureRandom
-import java.security.cert.CertificateFactory
 import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.HostnameVerifier
 
 sealed class ProfileUpdateResult {
     data object Success : ProfileUpdateResult()
@@ -420,127 +415,158 @@ suspend fun makeEditProfileRequest(
     context: Context,
     testConnection: HttpsURLConnection? = null
 ): ProfileUpdateResult {
-    val url = URL("${NetworkConfig.getBaseUrl()}/update-profile")
+    val TAG = "ProfileAPI"
 
-    val connection = testConnection ?: withContext(Dispatchers.IO) {
-        createHttpsConnection(url, context)
+    // Add debug logging at the start
+    Log.d(TAG, "Starting profile update request")
+
+    // Check if context is valid
+    if (context == null) {
+        Log.e(TAG, "Context is null")
+        return ProfileUpdateResult.Error("Internal error: Invalid context")
+    }
+
+    val url = URL("${NetworkConfig.getBaseUrl()}/update-profile")
+    Log.d(TAG, "Making profile update request to: $url")
+
+    val connection = testConnection ?: try {
+        url.openConnection() as HttpsURLConnection
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to create connection", e)
+        return ProfileUpdateResult.Error("Could not connect to server")
     }
 
     return try {
         connection.requestMethod = "PATCH"
         connection.setRequestProperty("Content-Type", "application/json")
 
-        // Retrieve the JWT token from SharedPreferences
-        val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return ProfileUpdateResult.Error("Please login to update your profile")
+        // Get and verify token
+        val jwtToken = TokenManager.getAccessToken(context)
+        Log.d(TAG, "JWT token retrieved: ${jwtToken?.take(10) ?: "null"}...")
 
-        // Add the JWT token to the Authorization header
+        if (jwtToken == null) {
+            Log.w(TAG, "No JWT token found")
+            return ProfileUpdateResult.Error("Please login to update your profile")
+        }
+
+        // Add JWT token to headers
         connection.setRequestProperty("Authorization", "Bearer $jwtToken")
         connection.doOutput = true
 
-        // Create JSON object for the profile update data
-        val jsonBody = JSONObject()
+        // Create request body
+        val jsonBody = JSONObject().apply {
+            if (height != null && height > 0) {
+                put("height", height)
+            }
+            if (weight != null && weight > 0) {
+                put("weight", weight)
+            }
+            if (!password.isNullOrBlank()) {
+                put("password", password)
+            }
+        }
 
-        // Only add non-null AND non-empty values
-        if (height != null && height > 0) {
-            jsonBody.put("height", height)
-        }
-        if (weight != null && weight > 0) {
-            jsonBody.put("weight", weight)
-        }
-        if (!password.isNullOrBlank()) {
-            jsonBody.put("password", password)
-        }
-
-        // Only proceed if there are actual changes to send
         if (jsonBody.length() == 0) {
+            Log.w(TAG, "No changes to update")
             return ProfileUpdateResult.Error("No changes to update")
         }
 
-        // Write the JSON data to the output stream
+        Log.d(TAG, "Sending update data: ${jsonBody.toString().replace("password", "*****")}")
+
+        // Send request
         withContext(Dispatchers.IO) {
-            OutputStreamWriter(connection.outputStream).apply {
-                write(jsonBody.toString())
-                flush()
-                close()
+            OutputStreamWriter(connection.outputStream).use { writer ->
+                writer.write(jsonBody.toString())
+                writer.flush()
             }
         }
 
-        when (val responseCode = connection.responseCode) {
+        val responseCode = connection.responseCode
+        Log.d(TAG, "Response code: $responseCode")
+
+        when (responseCode) {
             HttpURLConnection.HTTP_OK -> {
+                Log.d(TAG, "Profile updated successfully")
                 ProfileUpdateResult.Success
             }
+
             HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                ProfileUpdateResult.Error("Session expired. Please login again")
+                Log.w(TAG, "Unauthorized - attempting token refresh")
+                if (TokenManager.refreshToken(context)) {
+                    // Retry the request with new token
+                    Log.d(TAG, "Token refreshed, retrying request")
+                    makeEditProfileRequest(height, weight, password, context)
+                } else {
+                    Log.w(TAG, "Token refresh failed")
+                    ProfileUpdateResult.Error("Session expired. Please login again")
+                }
             }
+
             HttpURLConnection.HTTP_BAD_REQUEST -> {
-                // Try to get error message from response
                 val errorStream = connection.errorStream
                 val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Bad request error: $errorResponse")
+
                 val errorMessage = errorResponse?.let {
                     try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Invalid input data"
+                        JSONObject(it).getString("message") ?: "Invalid input data"
                     } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse error response", e)
                         "Invalid input data"
                     }
                 } ?: "Invalid input data"
+
                 ProfileUpdateResult.Error(errorMessage)
             }
+
             else -> {
-                // Try to get error message from response
                 val errorStream = connection.errorStream
                 val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Unexpected error response: $errorResponse")
+
                 val errorMessage = errorResponse?.let {
                     try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Failed to update profile: $responseCode"
+                        JSONObject(it).getString("message")
+                            ?: "Failed to update profile: $responseCode"
                     } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse error response", e)
                         "Failed to update profile: $responseCode"
                     }
                 } ?: "Failed to update profile: $responseCode"
+
                 ProfileUpdateResult.Error(errorMessage)
             }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
         val errorMessage = when (e) {
-            is java.net.ConnectException -> "Could not connect to server"
-            is java.net.SocketTimeoutException -> "Connection timed out"
-            is java.net.UnknownHostException -> "No internet connection"
-            is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
-            else -> "Error updating profile: ${e.localizedMessage}"
+            is java.net.ConnectException -> {
+                Log.e(TAG, "Connection error", e)
+                "Could not connect to server"
+            }
+
+            is java.net.SocketTimeoutException -> {
+                Log.e(TAG, "Timeout error", e)
+                "Connection timed out"
+            }
+
+            is java.net.UnknownHostException -> {
+                Log.e(TAG, "No internet connection", e)
+                "No internet connection"
+            }
+
+            is javax.net.ssl.SSLHandshakeException -> {
+                Log.e(TAG, "SSL error", e)
+                "SSL certificate verification failed"
+            }
+
+            else -> {
+                Log.e(TAG, "Unexpected error", e)
+                "Error updating profile: ${e.localizedMessage}"
+            }
         }
         ProfileUpdateResult.Error(errorMessage)
     } finally {
         connection.disconnect()
-    }
-}
-
-// Helper function to create SSL context
-private fun createSSLContext(context: Context): SSLContext {
-    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-    keyStore.load(null, null)
-
-    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
-        val certificateFactory = CertificateFactory.getInstance("X.509")
-        val certificate = certificateFactory.generateCertificate(certInputStream)
-        keyStore.setCertificateEntry("my_cert", certificate)
-    }
-
-    trustManagerFactory.init(keyStore)
-    val sslContext = SSLContext.getInstance("TLS")
-    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
-    return sslContext
-}
-
-// Helper function to create HTTPS connection
-private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
-    return (url.openConnection() as HttpsURLConnection).apply {
-        sslSocketFactory = createSSLContext(context).socketFactory
-        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

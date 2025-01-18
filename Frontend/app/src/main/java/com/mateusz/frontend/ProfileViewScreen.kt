@@ -2,6 +2,7 @@ package com.mateusz.frontend
 
 import android.content.Context
 import android.util.Base64
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cake
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Face
@@ -49,13 +49,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.KeyStore
-import java.security.SecureRandom
-import java.security.cert.CertificateFactory
 import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.HostnameVerifier
 
 @Composable
 fun ProfileViewScreen(
@@ -288,43 +282,64 @@ suspend fun fetchUserData(
     context: Context,
     testConnection: HttpsURLConnection? = null
 ): Map<String, Any?>? {
+    val TAG = "UserAPI"
+
     return withContext(Dispatchers.IO) {
-        // Retrieve JWT token from SharedPreferences
+        // Retrieve JWT token
         val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
         val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: run {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Please login to view profile", Toast.LENGTH_LONG).show()
-                }
-                return@withContext null
+
+        if (jwtToken == null) {
+            Log.w(TAG, "No JWT token found")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Please login to view profile", Toast.LENGTH_LONG).show()
             }
+            return@withContext null
+        }
 
         // Get user_id from JWT token
         val userId = getUserIdFromJwt(jwtToken)
-            ?: run {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Invalid session. Please login again", Toast.LENGTH_LONG).show()
-                }
-                return@withContext null
+        if (userId == null) {
+            Log.e(TAG, "Failed to extract user ID from JWT token")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Invalid session. Please login again", Toast.LENGTH_LONG).show()
             }
+            return@withContext null
+        }
 
         val url = URL("${NetworkConfig.getBaseUrl()}/user/$userId")
-        val connection = testConnection ?: createHttpsConnection(url, context)
+        Log.d(TAG, "Fetching user data from URL: $url")
+
+        val connection = testConnection ?: try {
+            url.openConnection() as HttpsURLConnection
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create connection", e)
+            throw e
+        }
 
         try {
             connection.requestMethod = "GET"
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+            Log.d(TAG, "Making request for user ID: $userId")
 
-            when (val responseCode = connection.responseCode) {
+            val responseCode = connection.responseCode
+            Log.d(TAG, "Response code: $responseCode")
+
+            when (responseCode) {
                 HttpURLConnection.HTTP_OK -> {
                     val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                    Log.d(TAG, "Received response: $responseText")
+
                     parseUserData(responseText)?.also {
-                        // Cache the user data in SharedPreferences if needed
+                        Log.d(TAG, "Successfully parsed user data")
+                        // Cache the user data
                         cacheUserData(context, it)
+                        Log.d(TAG, "User data cached successfully")
                     }
                 }
                 HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    Log.w(TAG, "Unauthorized access - token might be expired")
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
@@ -335,6 +350,7 @@ suspend fun fetchUserData(
                     null
                 }
                 HttpURLConnection.HTTP_NOT_FOUND -> {
+                    Log.w(TAG, "User profile not found for ID: $userId")
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
@@ -345,14 +361,17 @@ suspend fun fetchUserData(
                     null
                 }
                 else -> {
-                    // Try to get error message from response
+                    // Handle error response
                     val errorStream = connection.errorStream
                     val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    Log.e(TAG, "Error response: $errorResponse")
+
                     val errorMessage = errorResponse?.let {
                         try {
                             val jsonError = JSONObject(it)
                             jsonError.getString("message")
                         } catch (e: Exception) {
+                            Log.e(TAG, "Failed to parse error response", e)
                             "Failed to fetch user data: $responseCode"
                         }
                     } ?: "Failed to fetch user data: $responseCode"
@@ -365,46 +384,34 @@ suspend fun fetchUserData(
             }
         } catch (e: Exception) {
             val errorMessage = when (e) {
-                is java.net.ConnectException -> "Could not connect to server"
-                is java.net.SocketTimeoutException -> "Connection timed out"
-                is java.net.UnknownHostException -> "No internet connection"
-                is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
-                else -> "Error fetching user data: ${e.localizedMessage}"
+                is java.net.ConnectException -> {
+                    Log.e(TAG, "Connection error", e)
+                    "Could not connect to server"
+                }
+                is java.net.SocketTimeoutException -> {
+                    Log.e(TAG, "Timeout error", e)
+                    "Connection timed out"
+                }
+                is java.net.UnknownHostException -> {
+                    Log.e(TAG, "No internet connection", e)
+                    "No internet connection"
+                }
+                is javax.net.ssl.SSLHandshakeException -> {
+                    Log.e(TAG, "SSL error", e)
+                    "SSL certificate verification failed"
+                }
+                else -> {
+                    Log.e(TAG, "Unexpected error", e)
+                    "Error fetching user data: ${e.localizedMessage}"
+                }
             }
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
             }
-            e.printStackTrace()
             null
         } finally {
             connection.disconnect()
         }
-    }
-}
-
-// Helper function to create SSL context
-private fun createSSLContext(context: Context): SSLContext {
-    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-    keyStore.load(null, null)
-
-    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
-        val certificateFactory = CertificateFactory.getInstance("X.509")
-        val certificate = certificateFactory.generateCertificate(certInputStream)
-        keyStore.setCertificateEntry("my_cert", certificate)
-    }
-
-    trustManagerFactory.init(keyStore)
-    val sslContext = SSLContext.getInstance("TLS")
-    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
-    return sslContext
-}
-
-// Helper function to create HTTPS connection
-private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
-    return (url.openConnection() as HttpsURLConnection).apply {
-        sslSocketFactory = createSSLContext(context).socketFactory
-        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

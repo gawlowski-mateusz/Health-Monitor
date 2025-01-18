@@ -1,21 +1,21 @@
 package com.mateusz.frontend
 
 import android.os.Build
+import android.util.Log
 
 object NetworkConfig {
+    private const val TAG = "NetworkConfig"
     private const val EMULATOR_URL = "https://10.0.2.2:443"
-//    private const val DEVICE_URL = "http://192.168.0.192:8000"
-//    private const val DEVICE_URL = "http://192.168.0.59:8000"
-//    private const val DEVICE_URL = "http://192.168.119.41:8000"
-//    private const val DEVICE_URL = "https://192.168.106.41:443"
-    private const val DEVICE_URL = "https://192.168.0.193:443"
+    private const val PRODUCTION_URL = "https://health-monitor-production.up.railway.app"
 
     fun getBaseUrl(): String {
-        return if (isEmulator()) EMULATOR_URL else DEVICE_URL
+        val baseUrl = if (isEmulator()) EMULATOR_URL else PRODUCTION_URL
+        Log.d(TAG, "Using base URL: $baseUrl")
+        return baseUrl
     }
 
     fun isEmulator(): Boolean {
-        return (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")
+        val isEmulator = (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")
                 || Build.FINGERPRINT.startsWith("generic")
                 || Build.FINGERPRINT.startsWith("unknown")
                 || Build.HARDWARE.contains("goldfish")
@@ -32,5 +32,7 @@ object NetworkConfig {
                 || Build.PRODUCT.contains("vbox86p")
                 || Build.PRODUCT.contains("emulator")
                 || Build.PRODUCT.contains("simulator"))
+        Log.d(TAG, "Is emulator: $isEmulator")
+        return isEmulator
     }
 }
