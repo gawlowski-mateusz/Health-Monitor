@@ -3,6 +3,7 @@ package com.mateusz.frontend
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
@@ -63,13 +64,7 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
-import java.security.KeyStore
-import java.security.SecureRandom
-import java.security.cert.CertificateFactory
 import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.HostnameVerifier
 
 sealed class CyclingSessionResult {
     data object Success : CyclingSessionResult()
@@ -489,96 +484,148 @@ suspend fun makeAddNewCyclingSessionRequest(
     context: Context,
     testConnection: HttpsURLConnection? = null
 ): CyclingSessionResult {
-    val url = URL("${NetworkConfig.getBaseUrl()}/cycling")
+    val TAG = "CyclingSessionAPI"
 
-    val connection = testConnection ?: withContext(Dispatchers.IO) {
-        createHttpsConnection(url, context)
+    val url = URL("${NetworkConfig.getBaseUrl()}/cycling")
+    Log.d(TAG, "Adding new cycling session at: $url")
+
+    val connection = testConnection ?: try {
+        withContext(Dispatchers.IO) {
+            url.openConnection()
+        } as HttpsURLConnection
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to create connection", e)
+        return CyclingSessionResult.Error("Could not connect to server")
     }
 
     return try {
         connection.requestMethod = "POST"
         connection.setRequestProperty("Content-Type", "application/json")
 
-        // Retrieve the JWT token from SharedPreferences
-        val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return CyclingSessionResult.Error("Please login to add cycling session")
+        // Get and verify token
+        val jwtToken = TokenManager.getAccessToken(context)
+        Log.d(TAG, "JWT token retrieved: ${jwtToken?.take(10) ?: "null"}...")
 
-        // Add the JWT token to the Authorization header
+        if (jwtToken == null) {
+            Log.w(TAG, "No JWT token found")
+            return CyclingSessionResult.Error("Please login to add cycling session")
+        }
+
         connection.setRequestProperty("Authorization", "Bearer $jwtToken")
         connection.doOutput = true
 
-        // Create JSON object for the cycling session data
+        // Create request body
         val jsonBody = JSONObject().apply {
             put("average_pulse", averagePulse)
             put("duration", duration)
             password?.let { put("password", it) }
         }
+        Log.d(TAG, "Sending session data: ${jsonBody.toString().replace("password", "*****")}")
 
-        // Write the JSON data to the output stream
+        // Send request
         withContext(Dispatchers.IO) {
-            OutputStreamWriter(connection.outputStream).apply {
-                write(jsonBody.toString())
-                flush()
-                close()
+            OutputStreamWriter(connection.outputStream).use { writer ->
+                writer.write(jsonBody.toString())
+                writer.flush()
             }
         }
 
-        when (val responseCode = connection.responseCode) {
+        val responseCode = connection.responseCode
+        Log.d(TAG, "Response code: $responseCode")
+
+        when (responseCode) {
             HttpURLConnection.HTTP_CREATED -> {
+                Log.d(TAG, "Cycling session added successfully")
                 CyclingSessionResult.Success
             }
+
             HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                CyclingSessionResult.Error("Session expired. Please login again")
+                Log.w(TAG, "Unauthorized - attempting token refresh")
+                if (TokenManager.refreshToken(context)) {
+                    Log.d(TAG, "Token refreshed, retrying request")
+                    makeAddNewCyclingSessionRequest(duration, averagePulse, password, context)
+                } else {
+                    Log.w(TAG, "Token refresh failed")
+                    CyclingSessionResult.Error("Session expired. Please login again")
+                }
             }
+
             HttpURLConnection.HTTP_BAD_REQUEST -> {
-                // Try to get error message from response
                 val errorStream = connection.errorStream
                 val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Bad request error: $errorResponse")
+
                 val errorMessage = errorResponse?.let {
                     try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Invalid cycling session data"
+                        JSONObject(it).getString("message") ?: "Invalid cycling session data"
                     } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse error response", e)
                         "Invalid cycling session data"
                     }
                 } ?: "Invalid cycling session data"
+
                 CyclingSessionResult.Error(errorMessage)
             }
+
             HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                Log.e(TAG, "Server returned internal error")
                 CyclingSessionResult.Error("Server error. Please try again later")
             }
+
             else -> {
-                // Try to get error message from response
                 val errorStream = connection.errorStream
                 val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Unexpected error response: $errorResponse")
+
                 val errorMessage = errorResponse?.let {
                     try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Failed to add cycling session: $responseCode"
+                        JSONObject(it).getString("message")
+                            ?: "Failed to add cycling session: $responseCode"
                     } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse error response", e)
                         "Failed to add cycling session: $responseCode"
                     }
                 } ?: "Failed to add cycling session: $responseCode"
+
                 CyclingSessionResult.Error(errorMessage)
             }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
         val errorMessage = when (e) {
-            is java.net.ConnectException -> "Could not connect to server"
-            is java.net.SocketTimeoutException -> "Connection timed out"
-            is java.net.UnknownHostException -> "No internet connection"
-            is java.lang.NumberFormatException -> "Invalid number format for duration or pulse"
-            is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
+            is java.net.ConnectException -> {
+                Log.e(TAG, "Connection error", e)
+                "Could not connect to server"
+            }
+
+            is java.net.SocketTimeoutException -> {
+                Log.e(TAG, "Timeout error", e)
+                "Connection timed out"
+            }
+
+            is java.net.UnknownHostException -> {
+                Log.e(TAG, "No internet connection", e)
+                "No internet connection"
+            }
+
+            is java.lang.NumberFormatException -> {
+                Log.e(TAG, "Invalid number format", e)
+                "Invalid number format for duration or pulse"
+            }
+
+            is javax.net.ssl.SSLHandshakeException -> {
+                Log.e(TAG, "SSL error", e)
+                "SSL certificate verification failed"
+            }
+
             else -> {
-                // Try to get error message from error stream if available
+                Log.e(TAG, "Unexpected error", e)
                 val errorStream = connection.errorStream
                 val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Error response: $errorResponse")
+
                 errorResponse?.let {
                     try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message")
+                        JSONObject(it).getString("message")
                     } catch (e: Exception) {
                         "Error adding cycling session: ${e.localizedMessage}"
                     }
@@ -588,32 +635,6 @@ suspend fun makeAddNewCyclingSessionRequest(
         CyclingSessionResult.Error(errorMessage)
     } finally {
         connection.disconnect()
-    }
-}
-
-// Helper function to create SSL context
-private fun createSSLContext(context: Context): SSLContext {
-    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-    keyStore.load(null, null)
-
-    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
-        val certificateFactory = CertificateFactory.getInstance("X.509")
-        val certificate = certificateFactory.generateCertificate(certInputStream)
-        keyStore.setCertificateEntry("my_cert", certificate)
-    }
-
-    trustManagerFactory.init(keyStore)
-    val sslContext = SSLContext.getInstance("TLS")
-    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
-    return sslContext
-}
-
-// Helper function to create HTTPS connection
-private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
-    return (url.openConnection() as HttpsURLConnection).apply {
-        sslSocketFactory = createSSLContext(context).socketFactory
-        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

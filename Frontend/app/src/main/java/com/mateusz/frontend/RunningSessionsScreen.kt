@@ -1,6 +1,7 @@
 package com.mateusz.frontend
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -50,13 +51,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.security.KeyStore
-import java.security.SecureRandom
-import java.security.cert.CertificateFactory
 import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.HostnameVerifier
 
 @Composable
 fun RunningSessionsScreen(
@@ -438,67 +433,79 @@ private suspend fun fetchRunningSessions(
     context: Context,
     selectedDate: String? = null
 ): List<Map<String, Any>>? {
+    val TAG = "RunningAPI"
+
     return withContext(Dispatchers.IO) {
         val dateStr = selectedDate ?: LocalDate.now().format(DateTimeFormatter.ISO_DATE)
         val url = URL("${NetworkConfig.getBaseUrl()}/running/$dateStr")
+        Log.d(TAG, "Fetching running sessions from: $url")
 
-        val connection = createHttpsConnection(url, context)
+        val connection = try {
+            url.openConnection() as HttpsURLConnection
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create connection", e)
+            return@withContext null
+        }
 
         try {
             connection.requestMethod = "GET"
             connection.setRequestProperty("Content-Type", "application/json")
 
-            // Retrieve the JWT token from SharedPreferences
-            val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            val jwtToken = sharedPreferences.getString("access_token", null)
-                ?: run {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "Please login to view running sessions",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                    return@withContext null
+            // Get and verify token
+            val jwtToken = TokenManager.getAccessToken(context)
+            Log.d(TAG, "JWT token retrieved: ${jwtToken?.take(10) ?: "null"}...")
+
+            if (jwtToken == null) {
+                Log.w(TAG, "No JWT token found")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Please login to view running sessions", Toast.LENGTH_LONG).show()
                 }
+                return@withContext null
+            }
 
-            // Add the JWT token to the Authorization header
             connection.setRequestProperty("Authorization", "Bearer $jwtToken")
+            Log.d(TAG, "Fetching sessions for date: $dateStr")
 
-            when (val responseCode = connection.responseCode) {
+            val responseCode = connection.responseCode
+            Log.d(TAG, "Response code: $responseCode")
+
+            when (responseCode) {
                 HttpURLConnection.HTTP_OK -> {
                     val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                    Log.d(TAG, "Received response: $responseText")
                     parseRunningSessions(responseText)
                 }
                 HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "Session expired. Please login again",
-                            Toast.LENGTH_LONG
-                        ).show()
+                    Log.w(TAG, "Unauthorized - attempting token refresh")
+                    if (TokenManager.refreshToken(context)) {
+                        Log.d(TAG, "Token refreshed, retrying request")
+                        fetchRunningSessions(context, selectedDate)
+                    } else {
+                        Log.w(TAG, "Token refresh failed")
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Session expired. Please login again", Toast.LENGTH_LONG).show()
+                        }
+                        null
                     }
-                    null
                 }
                 HttpURLConnection.HTTP_INTERNAL_ERROR -> {
+                    Log.e(TAG, "Server returned internal error")
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "No running sessions found for $dateStr",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        Toast.makeText(context, "No running sessions found for $dateStr", Toast.LENGTH_SHORT).show()
                     }
                     null
                 }
                 else -> {
-                    // Try to get error message from response
                     val errorStream = connection.errorStream
                     val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                    Log.e(TAG, "Error response: $errorResponse")
+
                     val errorMessage = errorResponse?.let {
                         try {
                             val jsonError = JSONObject(it)
                             jsonError.getString("message")
                         } catch (e: Exception) {
+                            Log.e(TAG, "Failed to parse error response", e)
                             "Failed to fetch running sessions: $responseCode"
                         }
                     } ?: "Failed to fetch running sessions: $responseCode"
@@ -511,16 +518,30 @@ private suspend fun fetchRunningSessions(
             }
         } catch (e: Exception) {
             val errorMessage = when (e) {
-                is java.net.ConnectException -> "Could not connect to server"
-                is java.net.SocketTimeoutException -> "Connection timed out"
-                is java.net.UnknownHostException -> "No internet connection"
-                is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
-                else -> "Error fetching running sessions: ${e.localizedMessage}"
+                is java.net.ConnectException -> {
+                    Log.e(TAG, "Connection error", e)
+                    "Could not connect to server"
+                }
+                is java.net.SocketTimeoutException -> {
+                    Log.e(TAG, "Timeout error", e)
+                    "Connection timed out"
+                }
+                is java.net.UnknownHostException -> {
+                    Log.e(TAG, "No internet connection", e)
+                    "No internet connection"
+                }
+                is javax.net.ssl.SSLHandshakeException -> {
+                    Log.e(TAG, "SSL error", e)
+                    "SSL certificate verification failed"
+                }
+                else -> {
+                    Log.e(TAG, "Unexpected error", e)
+                    "Error fetching running sessions: ${e.localizedMessage}"
+                }
             }
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
             }
-            e.printStackTrace()
             null
         } finally {
             connection.disconnect()
@@ -555,32 +576,6 @@ private fun parseRunningSessions(response: String): List<Map<String, Any>>? {
     } catch (e: Exception) {
         e.printStackTrace()
         null
-    }
-}
-
-// Helper function to create SSL context
-private fun createSSLContext(context: Context): SSLContext {
-    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-    keyStore.load(null, null)
-
-    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
-        val certificateFactory = CertificateFactory.getInstance("X.509")
-        val certificate = certificateFactory.generateCertificate(certInputStream)
-        keyStore.setCertificateEntry("my_cert", certificate)
-    }
-
-    trustManagerFactory.init(keyStore)
-    val sslContext = SSLContext.getInstance("TLS")
-    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
-    return sslContext
-}
-
-// Helper function to create HTTPS connection
-private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
-    return (url.openConnection() as HttpsURLConnection).apply {
-        sslSocketFactory = createSSLContext(context).socketFactory
-        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 

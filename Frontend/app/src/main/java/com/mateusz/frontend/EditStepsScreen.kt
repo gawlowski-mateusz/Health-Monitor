@@ -1,6 +1,7 @@
 package com.mateusz.frontend
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -48,13 +49,7 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.KeyStore
-import java.security.SecureRandom
-import java.security.cert.CertificateFactory
 import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.HostnameVerifier
 
 sealed class StepsUpdateResult {
     data object Success : StepsUpdateResult()
@@ -174,113 +169,135 @@ suspend fun makeEditStepsRequest(
     context: Context,
     testConnection: HttpsURLConnection? = null
 ): StepsUpdateResult {
-    val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
+    val TAG = "StepsGoalAPI"
 
-    val connection = testConnection ?: withContext(Dispatchers.IO) {
-        createHttpsConnection(url, context)
+    val url = URL("${NetworkConfig.getBaseUrl()}/steps/goal")
+    Log.d(TAG, "Making steps goal update request to: $url")
+
+    val connection = testConnection ?: try {
+        withContext(Dispatchers.IO) {
+            url.openConnection()
+        } as HttpsURLConnection
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to create connection", e)
+        return StepsUpdateResult.Error("Could not connect to server")
     }
 
     return try {
         connection.requestMethod = "PATCH"
         connection.setRequestProperty("Content-Type", "application/json")
 
-        // Retrieve the JWT token from SharedPreferences
-        val sharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val jwtToken = sharedPreferences.getString("access_token", null)
-            ?: return StepsUpdateResult.Error("Please login to update steps goal")
+        // Get and verify token
+        val jwtToken = TokenManager.getAccessToken(context)
+        Log.d(TAG, "JWT token retrieved: ${jwtToken?.take(10) ?: "null"}...")
 
-        // Add the JWT token to the Authorization header
+        if (jwtToken == null) {
+            Log.w(TAG, "No JWT token found")
+            return StepsUpdateResult.Error("Please login to update steps goal")
+        }
+
         connection.setRequestProperty("Authorization", "Bearer $jwtToken")
         connection.doOutput = true
 
-        // Create JSON object for the steps update data
+        // Create request body
         val jsonBody = JSONObject().apply {
             goal?.let { put("goal", it) }
         }
+        Log.d(TAG, "Sending update data: $jsonBody")
 
-        // Write the JSON data to the output stream
+        // Send request
         withContext(Dispatchers.IO) {
-            OutputStreamWriter(connection.outputStream).apply {
-                write(jsonBody.toString())
-                flush()
-                close()
+            OutputStreamWriter(connection.outputStream).use { writer ->
+                writer.write(jsonBody.toString())
+                writer.flush()
             }
         }
 
-        when (val responseCode = connection.responseCode) {
+        val responseCode = connection.responseCode
+        Log.d(TAG, "Response code: $responseCode")
+
+        when (responseCode) {
             HttpURLConnection.HTTP_CREATED -> {
+                Log.d(TAG, "Steps goal updated successfully")
                 StepsUpdateResult.Success
             }
+
             HttpURLConnection.HTTP_UNAUTHORIZED -> {
-                StepsUpdateResult.Error("Session expired. Please login again")
+                Log.w(TAG, "Unauthorized - attempting token refresh")
+                if (TokenManager.refreshToken(context)) {
+                    Log.d(TAG, "Token refreshed, retrying request")
+                    makeEditStepsRequest(goal, context)
+                } else {
+                    Log.w(TAG, "Token refresh failed")
+                    StepsUpdateResult.Error("Session expired. Please login again")
+                }
             }
+
             HttpURLConnection.HTTP_BAD_REQUEST -> {
-                // Try to get error message from response
                 val errorStream = connection.errorStream
                 val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Bad request error: $errorResponse")
+
                 val errorMessage = errorResponse?.let {
                     try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Invalid steps goal"
+                        JSONObject(it).getString("message") ?: "Invalid steps goal"
                     } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse error response", e)
                         "Invalid steps goal"
                     }
                 } ?: "Invalid steps goal"
+
                 StepsUpdateResult.Error(errorMessage)
             }
+
             else -> {
-                // Try to get error message from response
                 val errorStream = connection.errorStream
                 val errorResponse = errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Unexpected error response: $errorResponse")
+
                 val errorMessage = errorResponse?.let {
                     try {
-                        val jsonError = JSONObject(it)
-                        jsonError.getString("message") ?: "Failed to update steps goal: $responseCode"
+                        JSONObject(it).getString("message")
+                            ?: "Failed to update steps goal: $responseCode"
                     } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse error response", e)
                         "Failed to update steps goal: $responseCode"
                     }
                 } ?: "Failed to update steps goal: $responseCode"
+
                 StepsUpdateResult.Error(errorMessage)
             }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
         val errorMessage = when (e) {
-            is java.net.ConnectException -> "Could not connect to server"
-            is java.net.SocketTimeoutException -> "Connection timed out"
-            is java.net.UnknownHostException -> "No internet connection"
-            is javax.net.ssl.SSLHandshakeException -> "SSL certificate verification failed"
-            else -> "Error updating steps goal: ${e.localizedMessage}"
+            is java.net.ConnectException -> {
+                Log.e(TAG, "Connection error", e)
+                "Could not connect to server"
+            }
+
+            is java.net.SocketTimeoutException -> {
+                Log.e(TAG, "Timeout error", e)
+                "Connection timed out"
+            }
+
+            is java.net.UnknownHostException -> {
+                Log.e(TAG, "No internet connection", e)
+                "No internet connection"
+            }
+
+            is javax.net.ssl.SSLHandshakeException -> {
+                Log.e(TAG, "SSL error", e)
+                "SSL certificate verification failed"
+            }
+
+            else -> {
+                Log.e(TAG, "Unexpected error", e)
+                "Error updating steps goal: ${e.localizedMessage}"
+            }
         }
         StepsUpdateResult.Error(errorMessage)
     } finally {
         connection.disconnect()
-    }
-}
-
-// Helper function to create SSL context
-private fun createSSLContext(context: Context): SSLContext {
-    val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-    keyStore.load(null, null)
-
-    context.resources.openRawResource(R.raw.cert).use { certInputStream ->
-        val certificateFactory = CertificateFactory.getInstance("X.509")
-        val certificate = certificateFactory.generateCertificate(certInputStream)
-        keyStore.setCertificateEntry("my_cert", certificate)
-    }
-
-    trustManagerFactory.init(keyStore)
-    val sslContext = SSLContext.getInstance("TLS")
-    sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
-    return sslContext
-}
-
-// Helper function to create HTTPS connection
-private fun createHttpsConnection(url: URL, context: Context): HttpsURLConnection {
-    return (url.openConnection() as HttpsURLConnection).apply {
-        sslSocketFactory = createSSLContext(context).socketFactory
-        hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 }
 
