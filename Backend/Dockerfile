@@ -8,4 +8,6 @@ RUN pip install gunicorn
 
 COPY . .
 
-CMD gunicorn --bind 0.0.0.0:$PORT wsgi:app
+ENV PYTHONPATH=/app
+
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "wsgi:app"]
