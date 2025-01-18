@@ -42,10 +42,15 @@ def configure_jwt(app):
 
     @jwt.token_in_blocklist_loader
     def check_if_token_in_blacklist(jwt_header, jwt_payload):
-        return jwt_payload["jti"] in BLOCKLIST
+        app.logger.info(f"Checking token in blocklist. JTI: {jwt_payload.get('jti')}")
+        is_blocked = jwt_payload["jti"] in BLOCKLIST
+        if is_blocked:
+            app.logger.warning(f"Token found in blocklist: {jwt_payload.get('jti')}")
+        return is_blocked
 
     @jwt.revoked_token_loader
     def revoked_token_callback(jwt_header, jwt_payload):
+        app.logger.warning(f"Revoked token used. Payload: {jwt_payload}")
         return jsonify({
             "description": "The token has been revoked.",
             "error": "token_revoked"
@@ -53,6 +58,7 @@ def configure_jwt(app):
 
     @jwt.needs_fresh_token_loader
     def token_not_fresh_callback(jwt_header, jwt_payload):
+        app.logger.warning(f"Non-fresh token used. Payload: {jwt_payload}")
         return jsonify({
             "description": "The token is not fresh.",
             "error": "fresh_token_required"
@@ -60,6 +66,7 @@ def configure_jwt(app):
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
+        app.logger.warning(f"Expired token used. Payload: {jwt_payload}")
         return jsonify({
             "message": "The token has expired.",
             "error": "token_expired"
@@ -67,17 +74,27 @@ def configure_jwt(app):
 
     @jwt.invalid_token_loader
     def invalid_token_callback(error):
+        app.logger.error(f"Invalid token error: {error}")
         return jsonify({
-            "message": "Invalid token.",
+            "message": f"Token validation failed: {error}",
             "error": "invalid_token"
         }), 401
 
     @jwt.unauthorized_loader
     def missing_token_callback(error):
+        app.logger.error(f"Missing token error: {error}")
         return jsonify({
-            "description": "Request does not contain an access token.",
+            "description": f"Request does not contain a valid access token: {error}",
             "error": "authorization_required"
         }), 401
+
+    # Add additional handler for token type verification
+    @jwt.token_verification_loader
+    def verify_token_type(jwt_header, jwt_payload):
+        app.logger.info(f"Verifying token type. Payload: {jwt_payload}")
+        token_type = jwt_payload.get('type', 'access')
+        app.logger.info(f"Token type: {token_type}")
+        return True
 
     return jwt
 
