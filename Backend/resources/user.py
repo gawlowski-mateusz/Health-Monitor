@@ -22,12 +22,11 @@ class UserLogin(MethodView):
         user = UserModel.query.filter(UserModel.email == user_data["email"]).first()
 
         if user and pbkdf2_sha256.verify(user_data["password"], user.password):
-            access_token = create_access_token(identity=user.user_id, fresh=True)
-            refresh_token = create_refresh_token(identity=user.user_id)
+            user_id_str = str(user.user_id)
+            access_token = create_access_token(identity=user_id_str, fresh=True)
+            refresh_token = create_refresh_token(identity=user_id_str)
 
-            current_app.logger.info(f"Login successful for user ID: {user.user_id}")
-            current_app.logger.debug(
-                f"Generated tokens - Access: {access_token[:20]}..., Refresh: {refresh_token[:20]}...")
+            current_app.logger.info(f"Login successful for user ID: {user_id_str}")
 
             return {"access_token": access_token, "refresh_token": refresh_token}, 200
 
@@ -80,19 +79,13 @@ class TokenRefresh(MethodView):
     @jwt_required(refresh=True)
     def post(self):
         try:
-            # Log the full token payload
-            jwt_payload = get_jwt()
-            current_app.logger.info(f"Token refresh attempt with payload type: {jwt_payload.get('type')}")
-
-            current_user = get_jwt_identity()
+            current_user = str(get_jwt_identity())  # Ensure it's a string
             current_app.logger.info(f"Refresh request for user ID: {current_user}")
 
             new_access_token = create_access_token(identity=current_user, fresh=False)
             new_refresh_token = create_refresh_token(identity=current_user)
 
             current_app.logger.info(f"New tokens created for user: {current_user}")
-            current_app.logger.debug(
-                f"New tokens - Access: {new_access_token[:20]}..., Refresh: {new_refresh_token[:20]}...")
 
             return {
                 "access_token": new_access_token,
