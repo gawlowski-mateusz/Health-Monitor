@@ -4,7 +4,8 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
+RUN pip install gunicorn
 
 COPY . .
 
-CMD ["flask", "run", "--host=0.0.0.0", "--port=443", "--cert=cert.pem", "--key=key.pem"]
+CMD gunicorn --bind 0.0.0.0:$PORT wsgi:app

@@ -1,35 +1,28 @@
+version: '3.3'
+
 services:
   backend:
     build: .
     ports:
-      - "443:443"
-    volumes:
-      - .:/app
-      - ./cert.pem:/app/cert.pem:ro
-      - ./key.pem:/app/key.pem:ro
+      - "${PORT}:${PORT}"
     environment:
+      - PORT=${PORT}
       - FLASK_APP=app
-      - FLASK_DEBUG=True
-      - FLASK_RUN_HOST=0.0.0.0
-      - FLASK_RUN_PORT=443
-      - FLASK_RUN_CERT=/app/cert.pem
-      - FLASK_RUN_KEY=/app/key.pem
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/postgres
+      - FLASK_DEBUG=False
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
     depends_on:
       - db
 
   db:
     image: postgres:latest
-    container_name: db-1
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-  adminer:
-    image: adminer:latest
-    container_name: adminer-1
-    ports:
-      - "8080:8080"
+volumes:
+  postgres_data:
