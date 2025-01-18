@@ -68,7 +68,7 @@ def configure_jwt(app):
     @jwt.invalid_token_loader
     def invalid_token_callback(error):
         return jsonify({
-            "message": "Signature verification failed.",
+            "message": "Invalid token.",
             "error": "invalid_token"
         }), 401
 

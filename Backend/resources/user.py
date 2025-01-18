@@ -1,3 +1,4 @@
+from flask import jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from passlib.hash import pbkdf2_sha256
@@ -81,9 +82,19 @@ class UserUpdateProfile(MethodView):
 class TokenRefresh(MethodView):
     @jwt_required(refresh=True)
     def post(self):
-        current_user = get_jwt_identity()
-        new_access_token = create_access_token(identity=current_user, fresh=False)
-        return {"access_token": new_access_token}, 200
+        try:
+            current_user = get_jwt_identity()
+            new_access_token = create_access_token(identity=current_user, fresh=False)
+            new_refresh_token = create_refresh_token(identity=current_user)
+            return {
+                "access_token": new_access_token,
+                "refresh_token": new_refresh_token
+            }, 200
+        except Exception as e:
+            return jsonify({
+                "message": str(e),
+                "error": "refresh_error"
+            }), 401
 
 
 @blp.route("/logout")
